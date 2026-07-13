@@ -42,8 +42,8 @@ export default async function LpMonitorPage() {
       ? typedPools.reduce((sum, p) => sum + (p.liquidity_usd || 0), 0) / totalPools
       : 0;
   const lastSynced = typedPools[0]?.last_synced_at ?? null;
-  return
-  (
+
+  return (
     <>
       <main className="flex-1 overflow-y-auto">
         <div className="flex items-center justify-between px-8 py-5 border-b border-[#E4E4E7]">
@@ -112,3 +112,24 @@ export default async function LpMonitorPage() {
                     <td className="px-5 py-3.5">{formatUsd(pool.volume_24h_usd)}</td>
                     <td className="px-5 py-3.5">
                       <Badge tone={riskTone(pool.risk_level)}>
+                        {pool.risk_level} · {pool.risk_score}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+                {typedPools.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-5 py-10 text-center text-gray-400 font-sans">
+                      No pool data yet. Run the cron snapshot endpoint to populate this table.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+      <DashboardFooter lastSyncedAt={lastSynced} />
+    </>
+  );
+}
