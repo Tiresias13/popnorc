@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Pool, TokenCategory } from "@/types/database";
 import { Badge } from "@/components/dashboard/badge";
+import { AddressModal, useAddressModal } from "@/components/dashboard/address-modal";
 
 const PAGE_SIZE = 10;
 
@@ -36,6 +37,7 @@ function categoryTone(category: string): "blue" | "purple" | "gray" {
 export function LpMonitorTabs({ pools }: { pools: Pool[] }) {
   const [activeTab, setActiveTab] = useState<TokenCategory | "all">("all");
   const [page, setPage] = useState(1);
+  const addressModal = useAddressModal();
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: pools.length, rwa: 0, meme: 0, other: 0, unknown: 0 };
@@ -97,11 +99,25 @@ export function LpMonitorTabs({ pools }: { pools: Pool[] }) {
                   key={pool.pool_address}
                   className="border-b border-[#F0F0F1] last:border-0 hover:bg-gray-50"
                 >
-                  <td className="px-5 py-3.5 font-sans font-medium">{pool.base_token_symbol}</td>
+                  <td className="px-5 py-3.5 font-sans font-medium">
+                    <button
+                      onClick={() => addressModal.open("token", pool.base_token_address)}
+                      className="hover:underline hover:text-[#B45309]"
+                    >
+                      {pool.base_token_symbol}
+                    </button>
+                  </td>
                   <td className="px-5 py-3.5">
                     <Badge tone={categoryTone(pool.category)}>{pool.category.toUpperCase()}</Badge>
                   </td>
-                  <td className="px-5 py-3.5 text-gray-500">{pool.pool_name}</td>
+                  <td className="px-5 py-3.5 text-gray-500">
+                    <button
+                      onClick={() => addressModal.open("pool", pool.pool_address)}
+                      className="hover:underline hover:text-[#B45309]"
+                    >
+                      {pool.pool_name}
+                    </button>
+                  </td>
                   <td className="px-5 py-3.5">{formatUsd(pool.liquidity_usd)}</td>
                   <td className="px-5 py-3.5">{formatUsd(pool.volume_24h_usd)}</td>
                   <td className="px-5 py-3.5">
@@ -147,6 +163,8 @@ export function LpMonitorTabs({ pools }: { pools: Pool[] }) {
           </div>
         )}
       </div>
+
+      <AddressModal state={addressModal.state} onClose={addressModal.close} />
     </div>
   );
 }
