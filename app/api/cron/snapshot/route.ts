@@ -19,6 +19,10 @@ export const maxDuration = 60;
 //
 // Protected by a shared secret passed via the Authorization header:
 //   Authorization: Bearer <CRON_SECRET>
+//
+// All writes are batched (one upsert/insert call per table) instead of
+// per-pool, to stay well within cron-job.org's timeout window even when
+// processing 50-100+ pools.
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
   const expected = `Bearer ${process.env.CRON_SECRET}`;
@@ -31,13 +35,16 @@ export async function GET(req: NextRequest) {
   const now = new Date();
 
   try {
-    const poolsPage1 = await fetchPools(1);
-    const poolsPage2 = await fetchPools(2).catch(() => []);
+    const [poolsPage1, poolsPage2] = await Promise.all([
+      fetchPools(1),
+      fetchPools(2).catch(() => []),
+    ]);
     const pools = [...poolsPage1, ...poolsPage2];
 
-    let poolsUpserted = 0;
-    let tokensUpserted = 0;
-    let volumeSnapshotsInserted = 0;
+    const poolRows: Record<string, unknown>[] = [];
+    const historyRows: Record<string, unknown>[] = [];
+    const tokenRows: Record<string, unknown>[] = [];
+    const volumeRows: Record<string, unknown>[] = [];
 
     for (const pool of pools) {
       const attrs = pool.attributes;
@@ -63,35 +70,28 @@ export async function GET(req: NextRequest) {
       const category = categorizeToken(baseSymbol);
       const riskScore = computeRiskScore({ liquidityUsd, poolAgeHours, volume24hUsd });
       const riskLevel = riskScoreToLevel(riskScore);
+poolRows.push({
+        pool_address: attrs.address,
+        pool_name: attrs.name,
+        base_token_address: baseTokenAddress,
+        base_token_symbol: baseSymbol,
+        quote_token_address: quoteTokenAddress,
+        quote_token_symbol: attrs.name.split("/")[1]?.trim() || null,
+        dex_id: dexId,
+        category,
+        liquidity_usd: liquidityUsd,
+        volume_24h_usd: volume24hUsd,
+        price_change_24h: priceChange24h,
+        base_token_price_usd: baseTokenPriceUsd,
+        market_cap_usd: marketCapUsd,
+        fdv_usd: fdvUsd,
+        pool_created_at: poolCreatedAt?.toISOString() ?? null,
+        risk_score: riskScore,
+        risk_level: riskLevel,
+        last_synced_at: now.toISOString(),
+      });
 
-      const { error: poolError } = await supabase.from("pools").upsert(
-        {
-          pool_address: attrs.address,
-          pool_name: attrs.name,
-          base_token_address: baseTokenAddress,
-          base_token_symbol: baseSymbol,
-          quote_token_address: quoteTokenAddress,
-          quote_token_symbol: attrs.name.split("/")[1]?.trim() || null,
-          dex_id: dexId,
-          category,
-          liquidity_usd: liquidityUsd,
-          volume_24h_usd: volume24hUsd,
-          price_change_24h: priceChange24h,
-          base_token_price_usd: baseTokenPriceUsd,
-          market_cap_usd: marketCapUsd,
-          fdv_usd: fdvUsd,
-          pool_created_at: poolCreatedAt?.toISOString() ?? null,
-          risk_score: riskScore,
-          risk_level: riskLevel,
-          last_synced_at: now.toISOString(),
-        },
-        { onConflict: "pool_address" }
-      );
-
-      if (!poolError) poolsUpserted++;
-
-      // Append to history for trend charts
-      await supabase.from("pool_history").insert({
+      historyRows.push({
         pool_address: attrs.address,
         liquidity_usd: liquidityUsd,
         volume_24h_usd: volume24hUsd,
@@ -99,7 +99,6 @@ export async function GET(req: NextRequest) {
         recorded_at: now.toISOString(),
       });
 
-      // Token verification / imposter detection
       if (category === "rwa") {
         const { closestMatch, similarity } = findClosestOfficialTicker(baseSymbol);
         const isExactMatch = closestMatch === baseSymbol;
@@ -117,28 +116,22 @@ export async function GET(req: NextRequest) {
           flaggedReason = "Does not closely match any known official ticker. Needs manual review.";
         }
 
-        const { error: tokenError } = await supabase.from("tokens").upsert(
-          {
-            token_address: baseTokenAddress,
-            symbol: baseSymbol,
-            name: baseSymbol,
-            category,
-            verification_status: verificationStatus,
-            matches_official_docs: isExactMatch,
-            liquidity_locked_pct: liquidityUsd > 50_000 ? 90 : liquidityUsd > 10_000 ? 40 : 5,
-            name_similarity_score: similarity,
-            flagged_reason: flaggedReason,
-            verified_at: verificationStatus === "verified" ? now.toISOString() : null,
-            updated_at: now.toISOString(),
-          },
-          { onConflict: "token_address" }
-        );
-
-        if (!tokenError) tokensUpserted++;
+        tokenRows.push({
+          token_address: baseTokenAddress,
+          symbol: baseSymbol,
+          name: baseSymbol,
+          category,
+          verification_status: verificationStatus,
+          matches_official_docs: isExactMatch,
+          liquidity_locked_pct: liquidityUsd > 50_000 ? 90 : liquidityUsd > 10_000 ? 40 : 5,
+          name_similarity_score: similarity,
+          flagged_reason: flaggedReason,
+          verified_at: verificationStatus === "verified" ? now.toISOString() : null,
+          updated_at: now.toISOString(),
+        });
       }
 
-      // Volume snapshot for the heatmap (bucketed by current day/hour)
-      const { error: volumeError } = await supabase.from("volume_snapshots").insert({
+      volumeRows.push({
         token_address: baseTokenAddress,
         token_symbol: baseSymbol,
         category,
@@ -147,19 +140,41 @@ export async function GET(req: NextRequest) {
         hour_of_day: now.getUTCHours(),
         snapshot_date: now.toISOString().split("T")[0],
       });
-
-      if (!volumeError) volumeSnapshotsInserted++;
     }
+
+    const [poolsResult, tokensResult] = await Promise.all([
+      poolRows.length
+        ? supabase.from("pools").upsert(poolRows, { onConflict: "pool_address" })
+        : Promise.resolve({ error: null }),
+      tokenRows.length
+        ? supabase.from("tokens").upsert(tokenRows, { onConflict: "token_address" })
+        : Promise.resolve({ error: null }),
+    ]);
+
+    const [historyResult, volumeResult] = await Promise.all([
+      historyRows.length
+        ? supabase.from("pool_history").insert(historyRows)
+        : Promise.resolve({ error: null }),
+      volumeRows.length
+        ? supabase.from("volume_snapshots").insert(volumeRows)
+        : Promise.resolve({ error: null }),
+    ]);
+
+    if (poolsResult.error) console.error("pools upsert error:", poolsResult.error);
+    if (tokensResult.error) console.error("tokens upsert error:", tokensResult.error);
+    if (historyResult.error) console.error("pool_history insert error:", historyResult.error);
+    if (volumeResult.error) console.error("volume_snapshots insert error:", volumeResult.error);
 
     return NextResponse.json({
       ok: true,
       timestamp: now.toISOString(),
       poolsProcessed: pools.length,
-      poolsUpserted,
-      tokensUpserted,
-      volumeSnapshotsInserted,
+      poolsUpserted: poolsResult.error ? 0 : poolRows.length,
+      tokensUpserted: tokensResult.error ? 0 : tokenRows.length,
+      volumeSnapshotsInserted: volumeResult.error ? 0 :
+volumeRows.length,
     });
-  } catch (err) {
+} catch (err) {
     console.error("Cron snapshot failed:", err);
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : "Unknown error" },
