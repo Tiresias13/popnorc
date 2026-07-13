@@ -15,8 +15,24 @@ const KNOWN_RWA_TICKERS = [
   "META-hood",
 ];
 
+// Base/quote assets and stablecoins are neither RWA tokens nor memecoins —
+// they're infrastructure. Lumping them into "meme" was misleading, so they
+// get their own "other" category.
+const KNOWN_OTHER_SYMBOLS = new Set([
+  "WETH",
+  "WBTC",
+  "USDG",
+  "USDC",
+  "USDT",
+  "DAI",
+  "USDE",
+  "WEETH",
+  "WSTETH",
+]);
+
 export function categorizeToken(symbol: string): TokenCategory {
   if (symbol.endsWith(OFFICIAL_RWA_SUFFIX)) return "rwa";
+  if (KNOWN_OTHER_SYMBOLS.has(symbol.toUpperCase())) return "other";
   return "meme";
 }
 
@@ -100,4 +116,13 @@ export function riskScoreToLevel(score: number): RiskLevel {
   if (score >= 70) return "high";
   if (score >= 35) return "medium";
   return "low";
+}
+
+// A pool is flagged as having a suspiciously high volume-to-liquidity ratio,
+// a common signature of wash trading on newly deployed tokens. This doesn't
+// mean the volume figure is wrong — GeckoTerminal measures it accurately —
+// but it means the volume may not reflect genuine organic trading.
+export function isSuspiciousVolumeRatio(liquidityUsd: number | null, volume24hUsd: number | null): boolean {
+  if (!liquidityUsd || liquidityUsd <= 0 || !volume24hUsd) return false;
+  return volume24hUsd / liquidityUsd > 10;
 }
