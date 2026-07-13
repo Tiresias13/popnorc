@@ -59,7 +59,7 @@ export function LpMonitorTabs({ pools }: { pools: Pool[] }) {
 
   return (
     <div>
-      <div className="flex gap-2 px-8 mb-4">
+      <div className="flex gap-2 px-4 md:px-8 mb-4">
         {CATEGORY_TABS.map((tab) => {
           const active = tab.key === activeTab;
           return (
@@ -78,9 +78,9 @@ export function LpMonitorTabs({ pools }: { pools: Pool[] }) {
         })}
       </div>
 
-      <div className="px-8 pb-8">
-        <div className="bg-white border border-[#E4E4E7] rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
+      <div className="px-4 md:px-8 pb-8">
+        <div className="bg-white border border-[#E4E4E7] rounded-xl overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
             <thead>
               <tr className="text-left text-gray-500 border-b border-[#E4E4E7] text-xs uppercase tracking-wide">
                 <th className="px-5 py-3 font-medium">Token</th>
@@ -101,6 +101,56 @@ export function LpMonitorTabs({ pools }: { pools: Pool[] }) {
                   <td className="px-5 py-3.5">
                     <Badge tone={categoryTone(pool.category)}>{pool.category.toUpperCase()}</Badge>
                   </td>
+                  <td className="px-5 py-3.5 text-gray-500">{pool.pool_name}</td>
+                  <td className="px-5 py-3.5">{formatUsd(pool.liquidity_usd)}</td>
+                  <td className="px-5 py-3.5">{formatUsd(pool.volume_24h_usd)}</td>
+                  <td className="px-5 py-3.5">
+                    <Badge tone={riskTone(pool.risk_level)}>
+                      {pool.risk_level} · {pool.risk_score}
+                    </Badge>
+                  </td>
+                </tr>
+              ))}
+              {pageItems.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-5 py-10 text-center text-gray-400 font-sans">
+                    No pools in this category yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between mt-4 text-sm text-gray-500 font-sans">
+            <span>
+              Page {currentPage} of {totalPages} — {filtered.length} pool
+              {filtered.length === 1 ? "" : "s"}
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 rounded-lg border border-[#E4E4E7] bg-white disabled:opacity-40 disabled:cursor-not-allowed hover:border-gray-300"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1.5 rounded-lg border border-[#E4E4E7] bg-white disabled:opacity-40 disabled:cursor-not-allowed hover:border-gray-300"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
                   <td className="px-5 py-3.5 text-gray-500">{pool.pool_name}</td>
                   <td className="px-5 py-3.5">{formatUsd(pool.liquidity_usd)}</td>
                   <td className="px-5 py-3.5">{formatUsd(pool.volume_24h_usd)}</td>
