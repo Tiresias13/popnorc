@@ -102,8 +102,12 @@ export default async function ImposterDetectorPage() {
             );
           })}
           {typedTokens.length === 0 && (
-            <div className="col-span-3 text-center text-gray-400 py-10">
-              No token data yet. Run the cron snapshot endpoint to populate this view.
+            <div className="col-span-3 text-center text-gray-400 py-16">
+              <p className="text-sm font-medium text-gray-500 mb-1">No imposters detected — yet.</p>
+              <p className="text-xs text-gray-400 max-w-sm mx-auto">
+                This view only populates once a tokenized-stock ticker (ending in "-hood") shows up
+                in the tracked pools. Nothing suspicious has surfaced so far.
+              </p>
             </div>
           )}
         </div>
