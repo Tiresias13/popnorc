@@ -26,7 +26,7 @@ function categoryTone(category: string): "blue" | "purple" | "gray" {
 }
 
 export default async function LpMonitorPage() {
-  const { data: pools } = await supabase
+  const { data: pools, error } = await supabase
     .from("pools")
     .select("*")
     .order("liquidity_usd", { ascending: false })
@@ -42,8 +42,8 @@ export default async function LpMonitorPage() {
       ? typedPools.reduce((sum, p) => sum + (p.liquidity_usd || 0), 0) / totalPools
       : 0;
   const lastSynced = typedPools[0]?.last_synced_at ?? null;
-
-  return (
+  return
+  (
     <>
       <main className="flex-1 overflow-y-auto">
         <div className="flex items-center justify-between px-8 py-5 border-b border-[#E4E4E7]">
@@ -54,6 +54,12 @@ export default async function LpMonitorPage() {
             </p>
           </div>
         </div>
+
+        {error && (
+          <div className="mx-8 mt-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm font-mono">
+            DEBUG ERROR: {error.message} (code: {error.code})
+          </div>
+        )}
 
         <div className="grid grid-cols-4 gap-4 px-8 py-6">
           <div className="bg-white border border-[#E4E4E7] rounded-xl p-4">
@@ -106,24 +112,3 @@ export default async function LpMonitorPage() {
                     <td className="px-5 py-3.5">{formatUsd(pool.volume_24h_usd)}</td>
                     <td className="px-5 py-3.5">
                       <Badge tone={riskTone(pool.risk_level)}>
-                        {pool.risk_level} · {pool.risk_score}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))}
-                {typedPools.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="px-5 py-10 text-center text-gray-400 font-sans">
-                      No pool data yet. Run the cron snapshot endpoint to populate this table.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </main>
-      <DashboardFooter lastSyncedAt={lastSynced} />
-    </>
-  );
-}
