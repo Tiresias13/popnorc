@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Wallet, WalletHolding, WalletActivity } from "@/types/database";
+import { AddressModal, useAddressModal } from "@/components/dashboard/address-modal";
 
 function formatUsd(value: number | null): string {
   if (value === null || value === undefined) return "—";
@@ -38,6 +39,7 @@ interface WalletDetail extends Wallet {
 export function SmartMoneyTable({ wallets }: { wallets: Wallet[] }) {
   const [selected, setSelected] = useState<WalletDetail | null>(null);
   const [loading, setLoading] = useState(false);
+  const addressModal = useAddressModal();
 
   async function openWallet(address: string) {
     setLoading(true);
@@ -114,9 +116,10 @@ export function SmartMoneyTable({ wallets }: { wallets: Wallet[] }) {
             </table>
           </div>
           <p className="text-xs text-gray-400 font-sans mt-4 max-w-2xl leading-relaxed">
-            Ranked by real on-chain position size across tracked tokens (contract addresses excluded).
-            "Net Position Change" is the USD value of buys minus sells over the last 7 days, valued at
-            current price. Click a row for full holdings and activity.
+            Ranked by real on-chain position size in tokens actively traded on Robinhood Chain
+            (contract addresses and stablecoin/wrapped-asset holdings excluded, minimum $10K to
+            qualify). "Net Position Change" is the USD value of buys minus sells over the last 7
+            days, valued at current price. Click a row for full holdings and activity.
           </p>
         </div>
       </main>
@@ -137,7 +140,9 @@ export function SmartMoneyTable({ wallets }: { wallets: Wallet[] }) {
               ✕ Close
             </button>
             {loading && <p className="text-xs text-gray-400">Loading...</p>}
-            {!loading && selected && <WalletDetailContent selected={selected} />}
+            {!loading && selected && (
+              <WalletDetailContent selected={selected} onTokenClick={(addr) => addressModal.open("token", addr)} />
+            )}
           </aside>
         </div>
       )}
@@ -145,18 +150,26 @@ export function SmartMoneyTable({ wallets }: { wallets: Wallet[] }) {
       <aside className="hidden md:block w-80 shrink-0 p-6 overflow-y-auto">
         {loading && <p className="text-xs text-gray-400">Loading...</p>}
         {!loading && selected ? (
-          <WalletDetailContent selected={selected} />
+          <WalletDetailContent selected={selected} onTokenClick={(addr) => addressModal.open("token", addr)} />
         ) : (
           !loading && (
             <p className="text-xs text-gray-400">Click a wallet row to see holdings and activity.</p>
           )
         )}
       </aside>
+
+      <AddressModal state={addressModal.state} onClose={addressModal.close} />
     </div>
   );
 }
 
-function WalletDetailContent({ selected }: { selected: WalletDetail }) {
+function WalletDetailContent({
+  selected,
+  onTokenClick,
+}: {
+  selected: WalletDetail;
+  onTokenClick: (tokenAddress: string) => void;
+}) {
   return (
     <>
             <div className="flex items-center gap-3 mb-5">
@@ -194,7 +207,12 @@ function WalletDetailContent({ selected }: { selected: WalletDetail }) {
                   key={holding.id}
                   className="bg-white border border-[#E4E4E7] rounded-lg p-3 flex justify-between items-center text-sm"
                 >
-                  <span className="font-medium">{holding.token_symbol}</span>
+                  <button
+                    onClick={() => onTokenClick(holding.token_address)}
+                    className="font-medium hover:underline hover:text-[#B45309]"
+                  >
+                    {holding.token_symbol}
+                  </button>
                   <span className="mono text-gray-400">{formatUsd(holding.value_usd)}</span>
                 </div>
               ))}
@@ -221,7 +239,16 @@ function WalletDetailContent({ selected }: { selected: WalletDetail }) {
                     <span className="mono text-gray-400 text-xs">{timeAgo(activity.occurred_at)}</span>
                   </div>
                   <div className="flex justify-between items-center mt-1">
-                    <span className="font-medium text-sm">{activity.token_symbol}</span>
+                    {activity.token_address ? (
+                      <button
+                        onClick={() => onTokenClick(activity.token_address!)}
+                        className="font-medium text-sm hover:underline hover:text-[#B45309]"
+                      >
+                        {activity.token_symbol}
+                      </button>
+                    ) : (
+                      <span className="font-medium text-sm">{activity.token_symbol}</span>
+                    )}
                     <span className="mono text-gray-500 text-sm">{formatUsd(activity.amount_usd)}</span>
                   </div>
                 </div>
