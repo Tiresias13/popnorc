@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabase/client";
 import { DashboardFooter } from "@/components/dashboard/footer";
-import { Badge } from "@/components/dashboard/badge";
 import { Pool } from "@/types/database";
+import { LpMonitorTabs } from "@/components/dashboard/lp-monitor-tabs";
 
 export const dynamic = "force-dynamic";
 
@@ -12,25 +12,12 @@ function formatUsd(value: number | null): string {
   return `$${value.toFixed(0)}`;
 }
 
-function riskTone(level: string): "emerald" | "amber" | "red" | "gray" {
-  if (level === "low") return "emerald";
-  if (level === "medium") return "amber";
-  if (level === "high") return "red";
-  return "gray";
-}
-
-function categoryTone(category: string): "blue" | "purple" | "gray" {
-  if (category === "rwa") return "blue";
-  if (category === "meme") return "purple";
-  return "gray";
-}
-
 export default async function LpMonitorPage() {
   const { data: pools } = await supabase
     .from("pools")
     .select("*")
     .order("liquidity_usd", { ascending: false })
-    .limit(50);
+    .limit(200);
 
   const typedPools = (pools || []) as Pool[];
 
@@ -74,54 +61,7 @@ export default async function LpMonitorPage() {
           </div>
         </div>
 
-        <div className="px-8 pb-8">
-          <div className="bg-white border border-[#E4E4E7] rounded-xl overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-gray-500 border-b border-[#E4E4E7] text-xs uppercase tracking-wide">
-                  <th className="px-5 py-3 font-medium">Token</th>
-                  <th className="px-5 py-3 font-medium">Category</th>
-                  <th className="px-5 py-3 font-medium">Pool</th>
-                  <th className="px-5 py-3 font-medium">Liquidity</th>
-                  <th className="px-5 py-3 font-medium">24h Volume</th>
-                  <th className="px-5 py-3 font-medium">Risk Score</th>
-                </tr>
-              </thead>
-              <tbody className="mono text-[13px]">
-                {typedPools.map((pool) => (
-                  <tr
-                    key={pool.pool_address}
-                    className="border-b border-[#F0F0F1] last:border-0 hover:bg-gray-50"
-                  >
-                    <td className="px-5 py-3.5 font-sans font-medium">
-                      {pool.base_token_symbol}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <Badge tone={categoryTone(pool.category)}>
-                        {pool.category.toUpperCase()}
-                      </Badge>
-                    </td>
-                    <td className="px-5 py-3.5 text-gray-500">{pool.pool_name}</td>
-                    <td className="px-5 py-3.5">{formatUsd(pool.liquidity_usd)}</td>
-                    <td className="px-5 py-3.5">{formatUsd(pool.volume_24h_usd)}</td>
-                    <td className="px-5 py-3.5">
-                      <Badge tone={riskTone(pool.risk_level)}>
-                        {pool.risk_level} · {pool.risk_score}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))}
-                {typedPools.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="px-5 py-10 text-center text-gray-400 font-sans">
-                      No pool data yet. Run the cron snapshot endpoint to populate this table.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <LpMonitorTabs pools={typedPools} />
       </main>
       <DashboardFooter lastSyncedAt={lastSynced} />
     </>
