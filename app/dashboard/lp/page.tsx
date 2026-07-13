@@ -33,7 +33,7 @@ export default async function LpMonitorPage() {
   return (
     <>
       <main className="flex-1 overflow-y-auto">
-        <div className="flex items-center justify-between px-8 py-5 border-b border-[#E4E4E7]">
+        <div className="flex items-center justify-between px-4 md:px-8 py-5 border-b border-[#E4E4E7]">
           <div>
             <h1 className="text-xl font-semibold">LP Quality Monitor</h1>
             <p className="text-sm text-gray-500 mt-0.5">
@@ -42,7 +42,7 @@ export default async function LpMonitorPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-4 gap-4 px-8 py-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-4 md:px-8 py-6">
           <div className="bg-white border border-[#E4E4E7] rounded-xl p-4">
             <p className="text-xs text-gray-500 mb-1">Total Pools Tracked</p>
             <p className="text-2xl font-bold mono">{totalPools}</p>
@@ -67,3 +67,4 @@ export default async function LpMonitorPage() {
     </>
   );
 }
+
