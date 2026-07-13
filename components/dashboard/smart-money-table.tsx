@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Wallet, WalletHolding, WalletActivity } from "@/types/database";
 import { AddressModal, useAddressModal } from "@/components/dashboard/address-modal";
 
@@ -36,10 +36,29 @@ interface WalletDetail extends Wallet {
   recent_activity: WalletActivity[];
 }
 
+const PAGE_SIZE = 10;
+
 export function SmartMoneyTable({ wallets }: { wallets: Wallet[] }) {
   const [selected, setSelected] = useState<WalletDetail | null>(null);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
   const addressModal = useAddressModal();
+
+  const sortedWallets = useMemo(
+    () =>
+      [...wallets].sort(
+        (a, b) =>
+          Math.abs(b.net_position_change_7d_usd ?? 0) - Math.abs(a.net_position_change_7d_usd ?? 0)
+      ),
+    [wallets]
+  );
+
+  const totalPages = Math.max(1, Math.ceil(sortedWallets.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageItems = useMemo(
+    () => sortedWallets.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [sortedWallets, currentPage]
+  );
 
   async function openWallet(address: string) {
     setLoading(true);
@@ -58,9 +77,6 @@ export function SmartMoneyTable({ wallets }: { wallets: Wallet[] }) {
         <div className="flex items-center justify-between px-4 md:px-8 py-5 border-b border-[#E4E4E7]">
           <div>
             <h1 className="text-xl font-semibold">Smart Money Tracker</h1>
-            <p className="text-sm text-gray-500 mt-0.5">
-              Top wallets by position size, ranked from real on-chain holdings
-            </p>
           </div>
         </div>
 
@@ -76,9 +92,9 @@ export function SmartMoneyTable({ wallets }: { wallets: Wallet[] }) {
                 </tr>
               </thead>
               <tbody className="mono text-[13px]">
-                {wallets.map((wallet, i) => {
+                {pageItems.map((wallet, i) => {
                   const net = wallet.net_position_change_7d_usd ?? 0;
-                  const trend = net > 0 ? "accumulating" : net < 0 ? "distributing" : "no activity";
+                  const trend = net > 0 ? "buying more" : net < 0 ? "selling off" : "just holding";
                   const trendColor =
                     net > 0 ? "text-emerald-600" : net < 0 ? "text-red-500" : "text-gray-400";
                   return (
@@ -86,10 +102,10 @@ export function SmartMoneyTable({ wallets }: { wallets: Wallet[] }) {
                       key={wallet.wallet_address}
                       onClick={() => openWallet(wallet.wallet_address)}
                       className={`border-b border-[#F0F0F1] last:border-0 hover:bg-gray-50 cursor-pointer ${
-                        i === 0 ? "bg-amber-50/50" : ""
+                        currentPage === 1 && i === 0 ? "bg-amber-50/50" : ""
                       }`}
                     >
-                      <td className={`px-5 py-3.5 font-bold ${i === 0 ? "text-[#F5A623]" : "text-gray-400"}`}>
+                      <td className={`px-5 py-3.5 font-bold ${currentPage === 1 && i === 0 ? "text-[#F5A623]" : "text-gray-400"}`}>
                         #{wallet.rank}
                       </td>
                       <td className="px-5 py-3.5 font-sans">{shortenAddress(wallet.wallet_address)}</td>
@@ -115,12 +131,31 @@ export function SmartMoneyTable({ wallets }: { wallets: Wallet[] }) {
               </tbody>
             </table>
           </div>
-          <p className="text-xs text-gray-400 font-sans mt-4 max-w-2xl leading-relaxed">
-            Ranked by real on-chain position size in tokens actively traded on Robinhood Chain
-            (contract addresses and stablecoin/wrapped-asset holdings excluded, minimum $10K to
-            qualify). "Net Position Change" is the USD value of buys minus sells over the last 7
-            days, valued at current price. Click a row for full holdings and activity.
-          </p>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4 text-sm text-gray-500 font-sans">
+              <span>
+                Page {currentPage} of {totalPages} — {wallets.length} wallet
+                {wallets.length === 1 ? "" : "s"}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1.5 rounded-lg border border-[#E4E4E7] bg-white disabled:opacity-40 disabled:cursor-not-allowed hover:border-gray-300"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1.5 rounded-lg border border-[#E4E4E7] bg-white disabled:opacity-40 disabled:cursor-not-allowed hover:border-gray-300"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </main>
 
