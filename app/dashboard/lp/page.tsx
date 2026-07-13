@@ -26,7 +26,11 @@ function categoryTone(category: string): "blue" | "purple" | "gray" {
 }
 
 export default async function LpMonitorPage() {
-  const { data: pools, error } = await supabase
+  const debugUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "UNDEFINED";
+  const debugKeyLen = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").length;
+  const debugKeyStart = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").slice(0, 20);
+
+  const { data: pools, error, status, statusText } = await supabase
     .from("pools")
     .select("*")
     .order("liquidity_usd", { ascending: false })
@@ -55,11 +59,9 @@ export default async function LpMonitorPage() {
           </div>
         </div>
 
-        {error && (
-          <div className="mx-8 mt-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm font-mono">
-            DEBUG ERROR: {error.message} (code: {error.code})
-          </div>
-        )}
+        <div className="mx-8 mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 text-xs font-mono whitespace-pre-wrap">
+          DEBUG: url={debugUrl} | keyLen={debugKeyLen} | keyStart={debugKeyStart} | status={status} {statusText} | dataLen={pools ? pools.length : "null"} | error={error ? JSON.stringify(error) : "none"}
+        </div>
 
         <div className="grid grid-cols-4 gap-4 px-8 py-6">
           <div className="bg-white border border-[#E4E4E7] rounded-xl p-4">
