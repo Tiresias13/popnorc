@@ -1,18 +1,13 @@
 import { supabase } from "@/lib/supabase/client";
 import { DashboardFooter } from "@/components/dashboard/footer";
+import { HeatmapGrid } from "@/components/dashboard/heatmap-grid";
 
 export const dynamic = "force-dynamic";
 
-const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-function intensityColor(volume: number, max: number): string {
-  if (max === 0) return "#F1F1F2";
-  const ratio = volume / max;
-  if (ratio < 0.05) return "#F1F1F2";
-  if (ratio < 0.25) return "#4a2f0d";
-  if (ratio < 0.5) return "#8a5a12";
-  if (ratio < 0.75) return "#d38a18";
-  return "#F5A623";
+function formatUsd(value: number): string {
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
+  if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
+  return `$${value.toFixed(0)}`;
 }
 
 export default async function HeatmapPage() {
@@ -25,15 +20,18 @@ export default async function HeatmapPage() {
     .gte("snapshot_date", sevenDaysAgo.toISOString().split("T")[0]);
 
   const grid: Record<string, number> = {};
-  let cryptoNativeVolume = 0;
-  let stockTokenVolume = 0;
+  let rwaVolume = 0;
+  let memeVolume = 0;
+  let otherVolume = 0;
 
   for (const row of snapshots || []) {
     const key = `${row.day_of_week}-${row.hour_of_day}`;
-    grid[key] = (grid[key] || 0) + Number(row.volume_usd || 0);
+    const vol = Number(row.volume_usd || 0);
+    grid[key] = (grid[key] || 0) + vol;
 
-    if (row.category === "rwa") stockTokenVolume += Number(row.volume_usd || 0);
-    else cryptoNativeVolume += Number(row.volume_usd || 0);
+    if (row.category === "rwa") rwaVolume += vol;
+    else if (row.category === "other") otherVolume += vol;
+    else memeVolume += vol;
   }
 
   const maxVolume = Math.max(0, ...Object.values(grid));
@@ -47,12 +45,7 @@ export default async function HeatmapPage() {
     }
   }
   const peakHour = peakKey ? parseInt(peakKey.split("-")[1], 10) : null;
-
-  function formatUsd(value: number): string {
-    if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(0)}M`;
-    if (value >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
-    return `$${value.toFixed(0)}`;
-  }
+  const hasData = Object.keys(grid).length > 0;
 
   return (
     <>
@@ -61,52 +54,24 @@ export default async function HeatmapPage() {
           <div>
             <h1 className="text-xl font-semibold">Volume Heatmap</h1>
             <p className="text-sm text-gray-500 mt-0.5">
-              Busiest hours per token — last 7 days (UTC)
+              Busiest trading hours across tracked pools — last 7 days (UTC)
             </p>
           </div>
         </div>
 
         <div className="px-8 py-6">
           <div className="bg-white border border-[#E4E4E7] rounded-xl p-6">
-            <div className="flex gap-2 mb-2 pl-14">
-              <span className="flex-1 flex justify-between text-[10px] text-gray-400 mono">
-                {Array.from({ length: 8 }, (_, i) => (
-                  <span key={i}>{i * 3}h</span>
-                ))}
-              </span>
-            </div>
-            <div className="space-y-1.5">
-              {DAYS.map((day, dayIndex) => (
-                <div key={day} className="flex items-center gap-1.5">
-                  <span className="w-10 text-xs text-gray-500 mono">{day}</span>
-                  <div className="flex-1 flex gap-1.5">
-                    {Array.from({ length: 24 }, (_, hour) => {
-                      const volume = grid[`${dayIndex}-${hour}`] || 0;
-                      return (
-                        <div
-                          key={hour}
-                          className="flex-1 rounded"
-                          style={{
-                            height: "22px",
-                            background: intensityColor(volume, maxVolume),
-                          }}
-                          title={`${day} ${hour}:00 UTC — ${formatUsd(volume)}`}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="flex items-center gap-2 mt-5 justify-end text-xs text-gray-500">
-              <span>Less</span>
-              <div style={{ width: 22, height: 22, borderRadius: 4, background: "#F1F1F2" }} />
-              <div style={{ width: 22, height: 22, borderRadius: 4, background: "#4a2f0d" }} />
-              <div style={{ width: 22, height: 22, borderRadius: 4, background: "#8a5a12" }} />
-              <div style={{ width: 22, height: 22, borderRadius: 4, background: "#d38a18" }} />
-              <div style={{ width: 22, height: 22, borderRadius: 4, background: "#F5A623" }} />
-              <span>More</span>
-            </div>
+            {hasData ? (
+              <HeatmapGrid grid={grid} maxVolume={maxVolume} />
+            ) : (
+              <div className="text-center text-gray-400 py-16">
+                <p className="text-sm font-medium text-gray-500 mb-1">No volume data yet.</p>
+                <p className="text-xs text-gray-400 max-w-sm mx-auto">
+                  This heatmap fills in as the snapshot sync runs over the next few hours and
+                  interval volume data accumulates.
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -118,14 +83,20 @@ export default async function HeatmapPage() {
             </p>
           </div>
           <div className="bg-white border border-[#E4E4E7] rounded-xl p-4">
-            <p className="text-xs text-gray-500 mb-1">Crypto-native Volume</p>
-            <p className="text-xl font-bold mono">{formatUsd(cryptoNativeVolume)}</p>
+            <p className="text-xs text-gray-500 mb-1">RWA Volume (7d)</p>
+            <p className="text-xl font-bold mono">{formatUsd(rwaVolume)}</p>
           </div>
           <div className="bg-white border border-[#E4E4E7] rounded-xl p-4">
-            <p className="text-xs text-gray-500 mb-1">Stock-token Volume</p>
-            <p className="text-xl font-bold mono">{formatUsd(stockTokenVolume)}</p>
+            <p className="text-xs text-gray-500 mb-1">Meme Volume (7d)</p>
+            <p className="text-xl font-bold mono">{formatUsd(memeVolume)}</p>
           </div>
         </div>
+
+        <p className="px-8 pb-8 text-xs text-gray-400 font-sans max-w-2xl leading-relaxed">
+          Volume is measured as the change in each pool's rolling 24h volume between snapshots
+          (roughly every 15 minutes), not a raw sum — this avoids double-counting the same trades
+          across multiple snapshots. Click any cell for the exact figure.
+        </p>
       </main>
       <DashboardFooter lastSyncedAt={null} />
     </>
