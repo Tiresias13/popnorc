@@ -1,19 +1,27 @@
-const TICKS = [
-  { text: "$TSLA-hood +4.2%", tone: "text-emerald-400" },
-  { text: "$NVDA-hoodz ⚠ IMPOSTER", tone: "text-red-400" },
-  { text: "$POPFROG +112%", tone: "text-emerald-400" },
-  { text: "0x7a3f...9e21 bought $AAPL-hood", tone: "text-gray-400" },
-  { text: "$AMZN-hood2 ⚠ liquidity 4%", tone: "text-red-400" },
+export interface TickerItem {
+  text: string;
+  tone: "emerald" | "red" | "gray";
+}
+
+const TONE_CLASS: Record<TickerItem["tone"], string> = {
+  emerald: "text-emerald-400",
+  red: "text-red-400",
+  gray: "text-gray-400",
+};
+
+const FALLBACK_ITEMS: TickerItem[] = [
+  { text: "Popnorc is watching Robinhood Chain — data loads as pools sync", tone: "gray" },
 ];
 
-export function TickerTape() {
-  const items = [...TICKS, ...TICKS];
+export function TickerTape({ items }: { items: TickerItem[] }) {
+  const source = items.length > 0 ? items : FALLBACK_ITEMS;
+  const looped = [...source, ...source];
 
   return (
     <div className="bg-[#0A0A0B] text-white overflow-hidden border-b border-black">
       <div className="marquee py-2 text-xs mono">
-        {items.map((item, i) => (
-          <span key={i} className={`px-6 shrink-0 ${item.tone}`}>
+        {looped.map((item, i) => (
+          <span key={i} className={`px-6 shrink-0 ${TONE_CLASS[item.tone]}`}>
             {item.text}
           </span>
         ))}
@@ -21,3 +29,4 @@ export function TickerTape() {
     </div>
   );
 }
+
