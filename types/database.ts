@@ -1,5 +1,5 @@
 export type RiskLevel = "low" | "medium" | "high" | "unknown";
-export type TokenCategory = "rwa" | "meme" | "unknown";
+export type TokenCategory = "rwa" | "meme" | "other" | "unknown";
 export type VerificationStatus = "verified" | "imposter" | "reviewing";
 
 export interface Pool {
@@ -55,8 +55,9 @@ export interface Token {
 export interface Wallet {
   id: string;
   wallet_address: string;
-  win_rate: number | null;
-  realized_pnl_7d_usd: number | null;
+  is_contract: boolean;
+  total_holdings_usd: number | null;
+  net_position_change_7d_usd: number | null;
   rank: number | null;
   last_synced_at: string;
   created_at: string;
