@@ -78,8 +78,8 @@ export function LpStrategyTabs({ pools }: { pools: Pool[] }) {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex gap-2">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+        <div className="flex gap-2 overflow-x-auto">
           {(Object.keys(LP_STRATEGY_PRESETS) as LpStrategyKey[]).map((key) => {
             const p = LP_STRATEGY_PRESETS[key];
             const active = key === activeKey;
@@ -102,7 +102,7 @@ export function LpStrategyTabs({ pools }: { pools: Pool[] }) {
         <select
           value={categoryFilter}
           onChange={(e) => selectCategory(e.target.value as "all" | "rwa" | "meme" | "other")}
-          className="px-3 py-2 rounded-lg text-sm border border-[#E4E4E7] bg-white text-gray-600"
+          className="px-3 py-2 rounded-lg text-sm border border-[#E4E4E7] bg-white text-gray-600 self-start"
         >
           <option value="all">All categories</option>
           <option value="rwa">RWA</option>
@@ -113,8 +113,8 @@ export function LpStrategyTabs({ pools }: { pools: Pool[] }) {
 
       <p className="text-sm text-gray-500 mb-5">{preset.description}</p>
 
-      <div className="bg-white border border-[#E4E4E7] rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="bg-white border border-[#E4E4E7] rounded-xl overflow-x-auto">
+        <table className="w-full min-w-[780px] text-sm">
           <thead>
             <tr className="text-left text-gray-500 border-b border-[#E4E4E7] text-xs uppercase tracking-wide">
               <th className="px-5 py-3 font-medium">Token</th>
@@ -206,3 +206,4 @@ export function LpStrategyTabs({ pools }: { pools: Pool[] }) {
     </div>
   );
 }
+
