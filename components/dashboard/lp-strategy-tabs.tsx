@@ -44,7 +44,15 @@ function categoryTone(category: string): "blue" | "purple" | "gray" {
   return "gray";
 }
 
-export function LpStrategyTabs({ pools }: { pools: Pool[] }) {
+export function LpStrategyTabs({
+  pools,
+  smartMoneySignal,
+  minSignalUsd,
+}: {
+  pools: Pool[];
+  smartMoneySignal?: Record<string, number>;
+  minSignalUsd?: number;
+}) {
   const [activeKey, setActiveKey] = useState<LpStrategyKey>("degen");
   const [categoryFilter, setCategoryFilter] = useState<"all" | "rwa" | "meme" | "other">("all");
   const [page, setPage] = useState(1);
@@ -137,12 +145,39 @@ export function LpStrategyTabs({ pools }: { pools: Pool[] }) {
                   className="border-b border-[#F0F0F1] last:border-0 hover:bg-gray-50"
                 >
                   <td className="px-5 py-3.5 font-sans font-medium">
-                    <button
-                      onClick={() => addressModal.open("token", pool.base_token_address)}
-                      className="hover:underline hover:text-[#B45309]"
-                    >
-                      {pool.base_token_symbol}
-                    </button>
+                    <span className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => addressModal.open("token", pool.base_token_address)}
+                        className="hover:underline hover:text-[#B45309]"
+                      >
+                        {pool.base_token_symbol}
+                      </button>
+                      {(() => {
+                        const signal = smartMoneySignal?.[pool.base_token_address.toLowerCase()] ?? 0;
+                        const threshold = minSignalUsd ?? 1000;
+                        if (signal >= threshold) {
+                          return (
+                            <span
+                              title="Smart money wallets are net buying this token (last 7 days)"
+                              className="text-xs cursor-help"
+                            >
+                              🔥
+                            </span>
+                          );
+                        }
+                        if (signal <= -threshold) {
+                          return (
+                            <span
+                              title="Smart money wallets are net selling this token (last 7 days)"
+                              className="text-xs cursor-help"
+                            >
+                              ⚠
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </span>
                   </td>
                   <td className="px-5 py-3.5">
                     <Badge tone={categoryTone(pool.category)}>{pool.category.toUpperCase()}</Badge>
