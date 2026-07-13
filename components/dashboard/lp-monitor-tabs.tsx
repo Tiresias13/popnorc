@@ -150,3 +150,4 @@ export function LpMonitorTabs({ pools }: { pools: Pool[] }) {
     </div>
   );
 }
+
