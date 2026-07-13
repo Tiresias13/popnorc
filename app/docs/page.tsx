@@ -1,6 +1,6 @@
 import { MarketingNav } from "@/components/marketing/nav";
 
-const BASE_URL = "https://popnorc.com/api/v1";
+const BASE_URL = "https://popnorc.xyz/api/v1";
 
 interface Endpoint {
   method: string;
@@ -16,7 +16,7 @@ const ENDPOINTS: Endpoint[] = [
     path: "/pools",
     description: "List liquidity pools with risk scoring and category.",
     params: [
-      { name: "category", type: "rwa | meme | unknown", description: "Filter by token category" },
+      { name: "category", type: "rwa | meme | other", description: "Filter by token category" },
       { name: "risk_level", type: "low | medium | high", description: "Filter by risk level" },
       { name: "sort", type: "liquidity | volume | risk", description: "Sort field (default: liquidity)" },
       { name: "limit", type: "number", description: "Max results, default 50, max 200" },
@@ -46,7 +46,7 @@ const ENDPOINTS: Endpoint[] = [
     description: "List tracked tokens with verification status.",
     params: [
       { name: "status", type: "verified | imposter | reviewing", description: "Filter by verification status" },
-      { name: "category", type: "rwa | meme", description: "Filter by category" },
+      { name: "category", type: "rwa | meme | other", description: "Filter by category" },
       { name: "limit", type: "number", description: "Max results, default 50, max 200" },
     ],
     example: `curl "${BASE_URL}/tokens?status=imposter"`,
@@ -66,7 +66,7 @@ const ENDPOINTS: Endpoint[] = [
   {
     method: "GET",
     path: "/wallets/leaderboard",
-    description: "Top smart-money wallets ranked by 7-day realized PnL.",
+    description: "Top smart-money wallets, ranked by total holdings value in real (non-stablecoin) tokens on Robinhood Chain, with 7-day net position change.",
     params: [{ name: "limit", type: "number", description: "Max results, default 20, max 100" }],
     example: `curl "${BASE_URL}/wallets/leaderboard?limit=10"`,
   },
@@ -81,7 +81,7 @@ const ENDPOINTS: Endpoint[] = [
     path: "/heatmap",
     description: "Aggregated trading volume grouped by day of week and hour (UTC), last 7 days.",
     params: [
-      { name: "category", type: "rwa | meme", description: "Filter by category" },
+      { name: "category", type: "rwa | meme | other", description: "Filter by category" },
       { name: "token", type: "address", description: "Filter to a single token" },
     ],
     example: `curl "${BASE_URL}/heatmap?category=meme"`,
@@ -148,10 +148,11 @@ export default function DocsPage() {
           <p>
             The public API is currently unauthenticated and rate-limited per IP at the
             infrastructure level. If you need higher limits for a production integration,
-            reach out via Twitter.
+            reach out through the contact info on the About page.
           </p>
         </div>
       </main>
     </>
   );
 }
+
