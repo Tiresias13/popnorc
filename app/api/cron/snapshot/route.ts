@@ -13,7 +13,7 @@ export const maxDuration = 60;
 
 // This endpoint is called periodically by cron-job.org to:
 // 1. Pull the latest pool data from GeckoTerminal
-// 2. Categorize tokens (RWA vs meme) and score liquidity risk
+// 2. Categorize tokens (RWA vs meme vs other) and score liquidity risk
 // 3. Flag potential imposter tickers
 // 4. Persist everything to Supabase (pools, pool_history, tokens, volume_snapshots)
 //
@@ -40,6 +40,22 @@ export async function GET(req: NextRequest) {
       fetchPools(2).catch(() => []),
     ]);
     const pools = [...poolsPage1, ...poolsPage2];
+
+    // GeckoTerminal's volume_usd.h24 is a rolling 24h figure re-fetched every
+    // run (every ~15 min). Summing that raw value across snapshots massively
+    // over-counts actual volume. To build an accurate heatmap, we instead
+    // store the DELTA between this run's rolling volume and the previous
+    // run's, which approximates the volume traded in the interval between
+    // snapshots. Fetch the previous known volume per pool in one batched query.
+    const poolAddresses = pools.map((p) => p.attributes.address);
+    const { data: previousPools } = await supabase
+      .from("pools")
+      .select("pool_address, volume_24h_usd")
+      .in("pool_address", poolAddresses);
+
+    const previousVolumeByPool = new Map<string, number>(
+      (previousPools || []).map((p) => [p.pool_address, Number(p.volume_24h_usd || 0)])
+    );
 
     const poolRows: Record<string, unknown>[] = [];
     const historyRows: Record<string, unknown>[] = [];
@@ -70,7 +86,8 @@ export async function GET(req: NextRequest) {
       const category = categorizeToken(baseSymbol);
       const riskScore = computeRiskScore({ liquidityUsd, poolAgeHours, volume24hUsd });
       const riskLevel = riskScoreToLevel(riskScore);
-poolRows.push({
+
+      poolRows.push({
         pool_address: attrs.address,
         pool_name: attrs.name,
         base_token_address: baseTokenAddress,
@@ -131,11 +148,19 @@ poolRows.push({
         });
       }
 
+      // Delta-based interval volume: how much the rolling 24h figure moved
+      // since the last snapshot. Negative deltas (old volume rolling off
+      // the 24h window with no new trades) are floored at 0 — they don't
+      // represent negative trading activity.
+      const previousVolume = previousVolumeByPool.get(attrs.address);
+      const intervalVolume =
+        previousVolume === undefined ? 0 : Math.max(0, volume24hUsd - previousVolume);
+
       volumeRows.push({
         token_address: baseTokenAddress,
         token_symbol: baseSymbol,
         category,
-        volume_usd: volume24hUsd,
+        volume_usd: intervalVolume,
         day_of_week: now.getUTCDay(),
         hour_of_day: now.getUTCHours(),
         snapshot_date: now.toISOString().split("T")[0],
@@ -171,10 +196,9 @@ poolRows.push({
       poolsProcessed: pools.length,
       poolsUpserted: poolsResult.error ? 0 : poolRows.length,
       tokensUpserted: tokensResult.error ? 0 : tokenRows.length,
-      volumeSnapshotsInserted: volumeResult.error ? 0 :
-volumeRows.length,
+      volumeSnapshotsInserted: volumeResult.error ? 0 : volumeRows.length,
     });
-} catch (err) {
+  } catch (err) {
     console.error("Cron snapshot failed:", err);
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : "Unknown error" },
