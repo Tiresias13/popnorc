@@ -1,9 +1,93 @@
 import Link from "next/link";
 import { MarketingNav } from "@/components/marketing/nav";
-import { TickerTape } from "@/components/marketing/ticker-tape";
+import { TickerTape, TickerItem } from "@/components/marketing/ticker-tape";
 import { supabase } from "@/lib/supabase/client";
+import { Pool, Token, WalletActivity } from "@/types/database";
 
 export const dynamic = "force-dynamic";
+
+function shortenAddress(address: string): string {
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function formatUsd(value: number): string {
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
+  return `$${value.toFixed(0)}`;
+}
+
+async function buildTickerItems(): Promise<TickerItem[]> {
+  const [{ data: gainers }, { data: losers }, { data: imposters }, { data: activity }] =
+    await Promise.all([
+      supabase
+        .from("pools")
+        .select("base_token_symbol, price_change_24h")
+        .not("price_change_24h", "is", null)
+        // Cap at a sane range — pools with near-zero starting prices can
+        // produce absurd percentage swings (e.g. new listings) that aren't
+        // meaningful "gainer" signals.
+        .lte("price_change_24h", 1000)
+        .gte("price_change_24h", -100)
+        .order("price_change_24h", { ascending: false })
+        .limit(3),
+      supabase
+        .from("pools")
+        .select("base_token_symbol, liquidity_usd")
+        .eq("category", "rwa")
+        .order("liquidity_usd", { ascending: true })
+        .limit(2),
+      supabase
+        .from("tokens")
+        .select("symbol, flagged_reason")
+        .eq("verification_status", "imposter")
+        .order("created_at", { ascending: false })
+        .limit(2),
+      supabase
+        .from("wallet_activity")
+        .select("wallet_address, action, token_symbol, amount_usd")
+        .eq("action", "buy")
+        .order("occurred_at", { ascending: false })
+        .limit(3),
+    ]);
+
+  const items: TickerItem[] = [];
+
+  for (const p of (gainers || []) as Pick<Pool, "base_token_symbol" | "price_change_24h">[]) {
+    if (!p.base_token_symbol || p.price_change_24h === null) continue;
+    const positive = p.price_change_24h >= 0;
+    items.push({
+      text: `$${p.base_token_symbol} ${positive ? "+" : ""}${p.price_change_24h.toFixed(1)}%`,
+      tone: positive ? "emerald" : "red",
+    });
+  }
+
+  for (const t of (imposters || []) as Pick<Token, "symbol" | "flagged_reason">[]) {
+    items.push({ text: `$${t.symbol} ⚠ IMPOSTER`, tone: "red" });
+  }
+
+  for (const a of (activity || []) as Pick<
+    WalletActivity,
+    "wallet_address" | "action" | "token_symbol" | "amount_usd"
+  >[]) {
+    if (!a.token_symbol) continue;
+    items.push({
+      text: `${shortenAddress(a.wallet_address)} bought $${a.token_symbol} (${formatUsd(
+        a.amount_usd || 0
+      )})`,
+      tone: "gray",
+    });
+  }
+
+  for (const p of (losers || []) as Pick<Pool, "base_token_symbol" | "liquidity_usd">[]) {
+    if (!p.base_token_symbol || p.liquidity_usd === null) continue;
+    items.push({
+      text: `$${p.base_token_symbol} ⚠ liquidity ${formatUsd(p.liquidity_usd)}`,
+      tone: "red",
+    });
+  }
+
+  return items;
+}
 
 export default async function HomePage() {
   const { data: pools } = await supabase.from("pools").select("liquidity_usd, volume_24h_usd");
@@ -11,6 +95,7 @@ export default async function HomePage() {
     .from("tokens")
     .select("id")
     .eq("verification_status", "imposter");
+  const tickerItems = await buildTickerItems();
 
   const poolCount = pools?.length ?? 0;
   const imposterCount = imposters?.length ?? 0;
@@ -24,7 +109,7 @@ export default async function HomePage() {
 
   return (
     <>
-      <TickerTape />
+      <TickerTape items={tickerItems} />
       <MarketingNav />
 
       {/* Hero */}
@@ -195,3 +280,4 @@ export default async function HomePage() {
     </>
   );
 }
+
