@@ -18,7 +18,7 @@ export default async function LpStrategyPage() {
   return (
     <>
       <main className="flex-1 overflow-y-auto">
-        <div className="flex items-center justify-between px-8 py-5 border-b border-[#E4E4E7]">
+        <div className="flex items-center justify-between px-4 md:px-8 py-5 border-b border-[#E4E4E7]">
           <div>
             <h1 className="text-xl font-semibold">LP Strategy</h1>
             <p className="text-sm text-gray-500 mt-0.5">
@@ -27,7 +27,7 @@ export default async function LpStrategyPage() {
           </div>
         </div>
 
-        <div className="px-8 py-6">
+        <div className="px-4 md:px-8 py-6">
           <LpStrategyTabs pools={typedPools} />
         </div>
       </main>
@@ -35,3 +35,4 @@ export default async function LpStrategyPage() {
     </>
   );
 }
+
