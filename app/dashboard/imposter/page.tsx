@@ -43,7 +43,7 @@ export default async function ImposterDetectorPage() {
   return (
     <>
       <main className="flex-1 overflow-y-auto">
-        <div className="flex items-center justify-between px-8 py-5 border-b border-[#E4E4E7]">
+        <div className="flex items-center justify-between px-4 md:px-8 py-5 border-b border-[#E4E4E7]">
           <div>
             <h1 className="text-xl font-semibold">Imposter Ticker Detector</h1>
             <p className="text-sm text-gray-500 mt-0.5">
@@ -52,7 +52,7 @@ export default async function ImposterDetectorPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-4 px-8 py-6">
+        <div className="grid grid-cols-3 gap-3 md:gap-4 px-4 md:px-8 py-6">
           {typedTokens.map((token) => {
             const style = statusStyles(token.verification_status);
             return (
@@ -116,3 +116,4 @@ export default async function ImposterDetectorPage() {
     </>
   );
 }
+
