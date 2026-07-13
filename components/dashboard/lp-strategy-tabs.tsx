@@ -9,6 +9,7 @@ import {
   getOpportunitiesForStrategy,
 } from "@/lib/lp-strategy";
 import { isSuspiciousVolumeRatio } from "@/lib/risk-scoring";
+import { AddressModal, useAddressModal } from "@/components/dashboard/address-modal";
 
 const PAGE_SIZE = 10;
 
@@ -47,6 +48,7 @@ export function LpStrategyTabs({ pools }: { pools: Pool[] }) {
   const [activeKey, setActiveKey] = useState<LpStrategyKey>("degen");
   const [categoryFilter, setCategoryFilter] = useState<"all" | "rwa" | "meme" | "other">("all");
   const [page, setPage] = useState(1);
+  const addressModal = useAddressModal();
 
   const preset = LP_STRATEGY_PRESETS[activeKey];
   const allOpportunities = useMemo(
@@ -134,7 +136,14 @@ export function LpStrategyTabs({ pools }: { pools: Pool[] }) {
                   key={pool.pool_address}
                   className="border-b border-[#F0F0F1] last:border-0 hover:bg-gray-50"
                 >
-                  <td className="px-5 py-3.5 font-sans font-medium">{pool.base_token_symbol}</td>
+                  <td className="px-5 py-3.5 font-sans font-medium">
+                    <button
+                      onClick={() => addressModal.open("token", pool.base_token_address)}
+                      className="hover:underline hover:text-[#B45309]"
+                    >
+                      {pool.base_token_symbol}
+                    </button>
+                  </td>
                   <td className="px-5 py-3.5">
                     <Badge tone={categoryTone(pool.category)}>{pool.category.toUpperCase()}</Badge>
                   </td>
@@ -203,6 +212,8 @@ export function LpStrategyTabs({ pools }: { pools: Pool[] }) {
         <span className="text-amber-500">⚠</span> flags pools where 24h volume exceeds 10x liquidity —
         a sign of possible wash trading, meaning the APR estimate may not reflect sustainable, organic activity.
       </p>
+
+      <AddressModal state={addressModal.state} onClose={addressModal.close} />
     </div>
   );
 }
