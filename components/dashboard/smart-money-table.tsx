@@ -12,7 +12,8 @@ function formatUsd(value: number | null): string {
 
 function formatSignedUsd(value: number | null): string {
   if (value === null || value === undefined) return "—";
-  const sign = value >= 0 ? "+" : "";
+  if (value === 0) return "$0";
+  const sign = value > 0 ? "+" : "";
   return `${sign}${formatUsd(value)}`;
 }
 
@@ -74,7 +75,10 @@ export function SmartMoneyTable({ wallets }: { wallets: Wallet[] }) {
               </thead>
               <tbody className="mono text-[13px]">
                 {wallets.map((wallet, i) => {
-                  const netPositive = (wallet.net_position_change_7d_usd ?? 0) >= 0;
+                  const net = wallet.net_position_change_7d_usd ?? 0;
+                  const trend = net > 0 ? "accumulating" : net < 0 ? "distributing" : "no activity";
+                  const trendColor =
+                    net > 0 ? "text-emerald-600" : net < 0 ? "text-red-500" : "text-gray-400";
                   return (
                     <tr
                       key={wallet.wallet_address}
@@ -88,11 +92,9 @@ export function SmartMoneyTable({ wallets }: { wallets: Wallet[] }) {
                       </td>
                       <td className="px-5 py-3.5 font-sans">{shortenAddress(wallet.wallet_address)}</td>
                       <td className="px-5 py-3.5">{formatUsd(wallet.total_holdings_usd)}</td>
-                      <td className={`px-5 py-3.5 ${netPositive ? "text-emerald-600" : "text-red-500"}`}>
-                        {formatSignedUsd(wallet.net_position_change_7d_usd)}
-                        <span className="ml-1.5 text-[10px] font-sans text-gray-400">
-                          {netPositive ? "accumulating" : "distributing"}
-                        </span>
+                      <td className={`px-5 py-3.5 ${trendColor}`}>
+                        {formatSignedUsd(net)}
+                        <span className="ml-1.5 text-[10px] font-sans text-gray-400">{trend}</span>
                       </td>
                     </tr>
                   );
@@ -140,7 +142,11 @@ export function SmartMoneyTable({ wallets }: { wallets: Wallet[] }) {
               <p className="text-xs text-gray-500 mb-1">Net Position Change (7d)</p>
               <p
                 className={`text-xl font-bold mono ${
-                  (selected.net_position_change_7d_usd ?? 0) >= 0 ? "text-emerald-600" : "text-red-500"
+                  (selected.net_position_change_7d_usd ?? 0) > 0
+                    ? "text-emerald-600"
+                    : (selected.net_position_change_7d_usd ?? 0) < 0
+                    ? "text-red-500"
+                    : "text-gray-400"
                 }`}
               >
                 {formatSignedUsd(selected.net_position_change_7d_usd)}
