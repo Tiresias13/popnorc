@@ -51,9 +51,9 @@ export function SmartMoneyTable({ wallets }: { wallets: Wallet[] }) {
   }
 
   return (
-    <div className="flex-1 flex overflow-hidden">
-      <main className="flex-1 overflow-y-auto border-r border-[#E4E4E7]">
-        <div className="flex items-center justify-between px-8 py-5 border-b border-[#E4E4E7]">
+    <div className="flex-1 flex flex-col md:flex-row md:overflow-hidden">
+      <main className="flex-1 md:overflow-y-auto md:border-r border-[#E4E4E7]">
+        <div className="flex items-center justify-between px-4 md:px-8 py-5 border-b border-[#E4E4E7]">
           <div>
             <h1 className="text-xl font-semibold">Smart Money Tracker</h1>
             <p className="text-sm text-gray-500 mt-0.5">
@@ -62,9 +62,9 @@ export function SmartMoneyTable({ wallets }: { wallets: Wallet[] }) {
           </div>
         </div>
 
-        <div className="px-8 py-6">
-          <div className="bg-white border border-[#E4E4E7] rounded-xl overflow-hidden">
-            <table className="w-full text-sm">
+        <div className="px-4 md:px-8 py-6">
+          <div className="bg-white border border-[#E4E4E7] rounded-xl overflow-x-auto">
+            <table className="w-full min-w-[640px] text-sm">
               <thead>
                 <tr className="text-left text-gray-500 border-b border-[#E4E4E7] text-xs uppercase tracking-wide">
                   <th className="px-5 py-3 font-medium">Rank</th>
@@ -101,6 +101,139 @@ export function SmartMoneyTable({ wallets }: { wallets: Wallet[] }) {
                 })}
                 {wallets.length === 0 && (
                   <tr>
+                    <td colSpan={4} className="px-5 py-16 text-center text-gray-400 font-sans">
+                      <p className="text-sm font-medium text-gray-500 mb-1">No wallet data yet.</p>
+                      <p className="text-xs text-gray-400 max-w-sm mx-auto">
+                        This table populates once the wallet tracking sync runs and pulls top holder
+                        activity from Robinhood Chain.
+                      </p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-gray-400 font-sans mt-4 max-w-2xl leading-relaxed">
+            Ranked by real on-chain position size across tracked tokens (contract addresses excluded).
+            "Net Position Change" is the USD value of buys minus sells over the last 7 days, valued at
+            current price. Click a row for full holdings and activity.
+          </p>
+        </div>
+      </main>
+
+      {(loading || selected) && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 md:hidden"
+          onClick={() => setSelected(null)}
+        >
+          <aside
+            className="absolute right-0 top-0 h-full w-[85%] max-w-sm bg-white p-6 overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setSelected(null)}
+              className="mb-4 text-xs text-gray-400 font-sans"
+            >
+              ✕ Close
+            </button>
+            {loading && <p className="text-xs text-gray-400">Loading...</p>}
+            {!loading && selected && <WalletDetailContent selected={selected} />}
+          </aside>
+        </div>
+      )}
+
+      <aside className="hidden md:block w-80 shrink-0 p-6 overflow-y-auto">
+        {loading && <p className="text-xs text-gray-400">Loading...</p>}
+        {!loading && selected ? (
+          <WalletDetailContent selected={selected} />
+        ) : (
+          !loading && (
+            <p className="text-xs text-gray-400">Click a wallet row to see holdings and activity.</p>
+          )
+        )}
+      </aside>
+    </div>
+  );
+}
+
+function WalletDetailContent({ selected }: { selected: WalletDetail }) {
+  return (
+    <>
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-12 h-12 rounded-full bg-[#F5A623] flex items-center justify-center text-black font-bold">
+                #{selected.rank}
+              </div>
+              <div>
+                <p className="font-semibold mono text-sm">{shortenAddress(selected.wallet_address)}</p>
+                <p className="text-xs text-gray-500">Rank #{selected.rank}</p>
+              </div>
+            </div>
+            <div className="bg-white border border-[#E4E4E7] rounded-xl p-4 mb-4">
+              <p className="text-xs text-gray-500 mb-1">Total Holdings</p>
+              <p className="text-xl font-bold mono">{formatUsd(selected.total_holdings_usd)}</p>
+            </div>
+            <div className="bg-white border border-[#E4E4E7] rounded-xl p-4 mb-4">
+              <p className="text-xs text-gray-500 mb-1">Net Position Change (7d)</p>
+              <p
+                className={`text-xl font-bold mono ${
+                  (selected.net_position_change_7d_usd ?? 0) > 0
+                    ? "text-emerald-600"
+                    : (selected.net_position_change_7d_usd ?? 0) < 0
+                    ? "text-red-500"
+                    : "text-gray-400"
+                }`}
+              >
+                {formatSignedUsd(selected.net_position_change_7d_usd)}
+              </p>
+            </div>
+
+            <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">Current Holdings</p>
+            <div className="space-y-2 mb-5">
+              {selected.holdings.map((holding) => (
+                <div
+                  key={holding.id}
+                  className="bg-white border border-[#E4E4E7] rounded-lg p-3 flex justify-between items-center text-sm"
+                >
+                  <span className="font-medium">{holding.token_symbol}</span>
+                  <span className="mono text-gray-400">{formatUsd(holding.value_usd)}</span>
+                </div>
+              ))}
+              {selected.holdings.length === 0 && (
+                <p className="text-xs text-gray-400">No holdings data.</p>
+              )}
+            </div>
+
+            <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">Recent Activity</p>
+            <div className="space-y-2">
+              {selected.recent_activity.map((activity) => (
+                <div
+                  key={activity.id}
+                  className="bg-white border border-[#E4E4E7] rounded-lg p-3 text-sm"
+                >
+                  <div className="flex justify-between items-center">
+                    <span
+                      className={`text-xs font-semibold uppercase ${
+                        activity.action === "buy" ? "text-emerald-600" : "text-red-500"
+                      }`}
+                    >
+                      {activity.action}
+                    </span>
+                    <span className="mono text-gray-400 text-xs">{timeAgo(activity.occurred_at)}</span>
+                  </div>
+                  <div className="flex justify-between items-center mt-1">
+                    <span className="font-medium text-sm">{activity.token_symbol}</span>
+                    <span className="mono text-gray-500 text-sm">{formatUsd(activity.amount_usd)}</span>
+                  </div>
+                </div>
+              ))}
+              {selected.recent_activity.length === 0 && (
+                <p className="text-xs text-gray-400">No recent activity.</p>
+              )}
+            </div>
+    </>
+  );
+}
+
                     <td colSpan={4} className="px-5 py-16 text-center text-gray-400 font-sans">
                       <p className="text-sm font-medium text-gray-500 mb-1">No wallet data yet.</p>
                       <p className="text-xs text-gray-400 max-w-sm mx-auto">
