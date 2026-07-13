@@ -109,7 +109,18 @@ export function AddressModal({
           <div className="space-y-2 mb-4">
             <Row label="symbol" value={String(data.symbol ?? "—")} />
             <Row label="category" value={String(data.category ?? "—")} />
-            <Row label="status" value={String(data.verification_status ?? "—")} />
+            {data.verification_status !== null && data.verification_status !== undefined && (
+              <Row label="status" value={String(data.verification_status)} />
+            )}
+            {(data.liquidity_usd !== undefined) && (
+              <Row label="liquidity" value={formatUsd(data.liquidity_usd as number)} />
+            )}
+            {(data.volume_24h_usd !== undefined) && (
+              <Row label="24h volume" value={formatUsd(data.volume_24h_usd as number)} />
+            )}
+            {(data.risk_level !== undefined) && (
+              <Row label="risk" value={String(data.risk_level ?? "—")} />
+            )}
           </div>
         )}
 
