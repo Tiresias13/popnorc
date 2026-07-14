@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { Pool } from "@/types/database";
-import { Badge } from "@/components/dashboard/badge";
 import {
   LP_STRATEGY_PRESETS,
   LpStrategyKey,
@@ -31,17 +30,14 @@ function formatApr(value: number | null): string {
   return `${value.toFixed(1)}%`;
 }
 
-function riskTone(level: string): "emerald" | "amber" | "red" | "gray" {
-  if (level === "low") return "emerald";
-  if (level === "medium") return "amber";
-  if (level === "high") return "red";
-  return "gray";
+function riskRowStyle(level: string): string {
+  if (level === "high") return "bg-[rgba(248,113,113,0.08)] border-[rgba(248,113,113,0.35)]";
+  return "bg-[#131315] border-[#1F1F22]";
 }
 
-function categoryTone(category: string): "blue" | "purple" | "gray" {
-  if (category === "rwa") return "blue";
-  if (category === "meme") return "purple";
-  return "gray";
+function riskTextColor(level: string): string {
+  if (level === "high") return "text-red-400";
+  return "text-gray-200";
 }
 
 export function LpStrategyTabs({
@@ -97,10 +93,10 @@ export function LpStrategyTabs({
               <button
                 key={key}
                 onClick={() => selectStrategy(key)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap ${
                   active
-                    ? "bg-[#0A0A0B] text-white"
-                    : "bg-white border border-[#E4E4E7] text-gray-600 hover:border-gray-300"
+                    ? "bg-[#F5A623] text-black"
+                    : "bg-[#131315] border border-[#1F1F22] text-gray-400 hover:border-gray-600"
                 }`}
               >
                 {p.label} (-{(p.rangePct * 100).toFixed(0)}%)
@@ -112,144 +108,142 @@ export function LpStrategyTabs({
         <select
           value={categoryFilter}
           onChange={(e) => selectCategory(e.target.value as "all" | "rwa" | "meme" | "other")}
-          className="px-3 py-2 rounded-lg text-sm border border-[#E4E4E7] bg-white text-gray-600 self-start"
+          className="px-3 py-2 rounded-lg text-sm border border-[#1F1F22] bg-[#131315] text-gray-300 self-start"
         >
-          <option value="all">All categories</option>
-          <option value="rwa">RWA</option>
-          <option value="meme">Meme</option>
-          <option value="other">Other</option>
+          <option value="all">all categories</option>
+          <option value="rwa">rwa</option>
+          <option value="meme">meme</option>
+          <option value="other">other</option>
         </select>
       </div>
 
       <p className="text-sm text-gray-500 mb-5">{preset.description}</p>
 
-      <div className="bg-white border border-[#E4E4E7] rounded-xl overflow-x-auto">
-        <table className="w-full min-w-[780px] text-sm">
-          <thead>
-            <tr className="text-left text-gray-500 border-b border-[#E4E4E7] text-xs uppercase tracking-wide">
-              <th className="px-5 py-3 font-medium">Token</th>
-              <th className="px-5 py-3 font-medium">Category</th>
-              <th className="px-5 py-3 font-medium">Liquidity</th>
-              <th className="px-5 py-3 font-medium">24h Volume</th>
-              <th className="px-5 py-3 font-medium">Risk</th>
-              <th className="px-5 py-3 font-medium">Suggested Min Price</th>
-              <th className="px-5 py-3 font-medium">Est. APR ({preset.label})</th>
-            </tr>
-          </thead>
-          <tbody className="mono text-[13px]">
-            {pageItems.map(({ pool, minPrice, estApr }) => {
-              const suspicious = isSuspiciousVolumeRatio(pool.liquidity_usd, pool.volume_24h_usd);
-              return (
-                <tr
-                  key={pool.pool_address}
-                  className="border-b border-[#F0F0F1] last:border-0 hover:bg-gray-50"
-                >
-                  <td className="px-5 py-3.5 font-sans font-medium">
-                    <span className="flex items-center gap-1.5">
-                      <button
-                        onClick={() => addressModal.open("token", pool.base_token_address)}
-                        className="hover:underline hover:text-[#B45309]"
+      <div className="flex flex-col gap-2">
+        {pageItems.map(({ pool, minPrice, estApr }) => {
+          const suspicious = isSuspiciousVolumeRatio(pool.liquidity_usd, pool.volume_24h_usd);
+          const signal = smartMoneySignal?.[pool.base_token_address.toLowerCase()] ?? 0;
+          const threshold = minSignalUsd ?? 1000;
+          const signalBadge =
+            signal >= threshold ? (
+              <span
+                title="Smart money wallets are net buying this token (last 7 days)"
+                className="text-xs cursor-help"
+              >
+                🔥
+              </span>
+            ) : signal <= -threshold ? (
+              <span
+                title="Smart money wallets are net selling this token (last 7 days)"
+                className="text-xs cursor-help"
+              >
+                ⚠
+              </span>
+            ) : null;
+
+          return (
+            <div
+              key={pool.pool_address}
+              className={`rounded-xl border px-4 py-3 ${riskRowStyle(pool.risk_level)}`}
+            >
+              <div className="flex items-center justify-between mb-2.5">
+                <span className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => addressModal.open("token", pool.base_token_address)}
+                    className="flex items-center gap-2 text-white font-semibold text-sm hover:text-[#F5A623]"
+                  >
+                    <span className="w-7 h-7 rounded-full bg-[#1F1F22] flex items-center justify-center text-[11px] font-bold text-gray-400 shrink-0">
+                      {pool.base_token_symbol?.charAt(0) ?? "?"}
+                    </span>
+                    {pool.base_token_symbol}
+                  </button>
+                  {signalBadge}
+                </span>
+                <span className="text-[11px] font-medium uppercase tracking-wide text-gray-200">
+                  {pool.category}
+                </span>
+              </div>
+              <div className="flex justify-between gap-2 mb-2">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[10px] uppercase tracking-wide text-gray-500">liquidity</span>
+                  <span className="mono text-xs text-gray-200">{formatUsd(pool.liquidity_usd)}</span>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[10px] uppercase tracking-wide text-gray-500">24h vol</span>
+                  <span className="mono text-xs text-gray-200 flex items-center gap-1">
+                    {formatUsd(pool.volume_24h_usd)}
+                    {suspicious && (
+                      <span
+                        title="Volume is 10x+ the pool's liquidity — a common signature of wash trading. Treat this APR estimate with caution."
+                        className="text-amber-400 cursor-help"
                       >
-                        {pool.base_token_symbol}
-                      </button>
-                      {(() => {
-                        const signal = smartMoneySignal?.[pool.base_token_address.toLowerCase()] ?? 0;
-                        const threshold = minSignalUsd ?? 1000;
-                        if (signal >= threshold) {
-                          return (
-                            <span
-                              title="Smart money wallets are net buying this token (last 7 days)"
-                              className="text-xs cursor-help"
-                            >
-                              🔥
-                            </span>
-                          );
-                        }
-                        if (signal <= -threshold) {
-                          return (
-                            <span
-                              title="Smart money wallets are net selling this token (last 7 days)"
-                              className="text-xs cursor-help"
-                            >
-                              ⚠
-                            </span>
-                          );
-                        }
-                        return null;
-                      })()}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <Badge tone={categoryTone(pool.category)}>{pool.category.toUpperCase()}</Badge>
-                  </td>
-                  <td className="px-5 py-3.5">{formatUsd(pool.liquidity_usd)}</td>
-                  <td className="px-5 py-3.5">
-                    <span className="flex items-center gap-1.5">
-                      {formatUsd(pool.volume_24h_usd)}
-                      {suspicious && (
-                        <span
-                          title="Volume is 10x+ the pool's liquidity — a common signature of wash trading. Treat this APR estimate with caution."
-                          className="text-amber-500 cursor-help"
-                        >
-                          ⚠
-                        </span>
-                      )}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <Badge tone={riskTone(pool.risk_level)}>{pool.risk_level}</Badge>
-                  </td>
-                  <td className="px-5 py-3.5">{formatPrice(minPrice)}</td>
-                  <td className="px-5 py-3.5 font-semibold text-[#B45309]">{formatApr(estApr)}</td>
-                </tr>
-              );
-            })}
-            {pageItems.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-5 py-10 text-center text-gray-400 font-sans">
-                  No pools currently qualify for the {preset.label} strategy. Check back after the
-                  next sync.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                        ⚠
+                      </span>
+                    )}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[10px] uppercase tracking-wide text-gray-500">risk</span>
+                  <span className={`mono text-xs font-medium ${riskTextColor(pool.risk_level)}`}>
+                    {pool.risk_level}
+                  </span>
+                </div>
+              </div>
+              <div className="flex justify-between gap-2">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[10px] uppercase tracking-wide text-gray-500">min price</span>
+                  <span className="mono text-xs text-gray-200">{formatPrice(minPrice)}</span>
+                </div>
+                <div className="flex flex-col gap-0.5 items-end">
+                  <span className="text-[10px] uppercase tracking-wide text-gray-500">
+                    est. apr ({preset.label})
+                  </span>
+                  <span className="mono text-xs font-bold text-[#F5A623]">{formatApr(estApr)}</span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        {pageItems.length === 0 && (
+          <div className="rounded-xl border border-[#1F1F22] bg-[#131315] px-5 py-10 text-center text-gray-500 font-sans text-sm">
+            nothing qualifies for {preset.label} right now. check back after the next sync.
+          </div>
+        )}
       </div>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4 text-sm text-gray-500 font-sans">
+        <div className="flex items-center justify-between mt-4 text-sm text-gray-400 font-sans">
           <span>
-            Page {currentPage} of {totalPages} — {opportunities.length} opportunit
+            page {currentPage} of {totalPages} — {opportunities.length} opportunit
             {opportunities.length === 1 ? "y" : "ies"}
           </span>
           <div className="flex gap-2">
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={currentPage === 1}
-              className="px-3 py-1.5 rounded-lg border border-[#E4E4E7] bg-white disabled:opacity-40 disabled:cursor-not-allowed hover:border-gray-300"
+              className="px-3 py-1.5 rounded-lg border border-[#1F1F22] bg-[#131315] text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed hover:border-gray-600"
             >
-              Previous
+              previous
             </button>
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={currentPage === totalPages}
-              className="px-3 py-1.5 rounded-lg border border-[#E4E4E7] bg-white disabled:opacity-40 disabled:cursor-not-allowed hover:border-gray-300"
+              className="px-3 py-1.5 rounded-lg border border-[#1F1F22] bg-[#131315] text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed hover:border-gray-600"
             >
-              Next
+              next
             </button>
           </div>
         </div>
       )}
 
-      <p className="text-xs text-gray-400 font-sans mt-4 max-w-2xl leading-relaxed">
-        One-sided range starting at current price, extending down {(preset.rangePct * 100).toFixed(0)}%.
-        APR estimates are backward-looking (trailing 24h volume) and exclude impermanent loss.
-        <span className="text-amber-500">⚠</span> flags pools where 24h volume exceeds 10x liquidity —
-        a sign of possible wash trading, meaning the APR estimate may not reflect sustainable, organic activity.
+      <p className="text-xs text-gray-500 font-sans mt-4 max-w-2xl leading-relaxed">
+        one-sided range from current price, down {(preset.rangePct * 100).toFixed(0)}%. apr is a
+        backward-looking estimate from trailing 24h volume, excludes impermanent loss.{" "}
+        <span className="text-amber-400">⚠</span> means volume looks like wash trading — treat that
+        apr number with a grain of salt.
       </p>
 
       <AddressModal state={addressModal.state} onClose={addressModal.close} />
     </div>
   );
 }
-
