@@ -30,16 +30,30 @@ export async function GET(req: NextRequest) {
   if (!process.env.CRON_SECRET || authHeader !== expected) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
   const supabase = createServerClient();
   const now = new Date();
 
   try {
-    const [poolsPage1, poolsPage2] = await Promise.all([
-      fetchPools(1),
-      fetchPools(2).catch(() => []),
-    ]);
-    const pools = [...poolsPage1, ...poolsPage2];
+    // GeckoTerminal's onchain pools endpoint paginates in batches of 20 and
+    // caps out at page 10 (200 pools) for the free tier. Fetching only the
+    // first 2 pages (as this used to do) silently dropped roughly half of
+    // Robinhood Chain's actual pools from every volume/liquidity
+    // calculation. Pages must be fetched sequentially (not in parallel) —
+    // GeckoTerminal's rate limit rejects concurrent requests from the same
+    // caller with a 429. A short delay between requests keeps us under
+    // that limit; fetching stops as soon as a page comes back empty.
+    const pools = [];
+    for (let page = 1; page <= 10; page++) {
+      let pagePools;
+      try {
+        pagePools = await fetchPools(page);
+      } catch {
+        break;
+      }
+      if (pagePools.length === 0) break;
+      pools.push(...pagePools);
+      if (page < 10) await new Promise((resolve) => setTimeout(resolve, 2200));
+    }
 
     // GeckoTerminal's volume_usd.h24 is a rolling 24h figure re-fetched every
     // run (every ~15 min). Summing that raw value across snapshots massively
@@ -86,7 +100,6 @@ export async function GET(req: NextRequest) {
       const category = categorizeToken(baseSymbol);
       const riskScore = computeRiskScore({ liquidityUsd, poolAgeHours, volume24hUsd });
       const riskLevel = riskScoreToLevel(riskScore);
-
       poolRows.push({
         pool_address: attrs.address,
         pool_name: attrs.name,
