@@ -25,9 +25,18 @@ export default async function SmartMoneyPage() {
     .select("wallet_address, token_address, token_symbol")
     .in("wallet_address", typedWallets.map((w) => w.wallet_address));
 
+  const heldTokensByWallet = new Map<string, string[]>();
+  for (const row of holdings || []) {
+    if (!row.token_symbol) continue;
+    const list = heldTokensByWallet.get(row.wallet_address) ?? [];
+    if (!list.includes(row.token_symbol)) list.push(row.token_symbol);
+    heldTokensByWallet.set(row.wallet_address, list);
+  }
+
   const nodes: WalletNode[] = typedWallets.map((w) => ({
     address: w.wallet_address,
     holdingsUsd: w.total_holdings_usd ?? 0,
+    heldTokens: heldTokensByWallet.get(w.wallet_address) ?? [],
   }));
 
   const walletsByToken = new Map<string, { address: string; symbol: string | null }[]>();
