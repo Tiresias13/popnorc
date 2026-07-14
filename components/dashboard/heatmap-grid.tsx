@@ -14,16 +14,6 @@ function intensityColor(volume: number, max: number): string {
   return "#F5A623";
 }
 
-// Cells with more volume render visually bigger, not just brighter — makes
-// the busy blocks pop out of the grid instead of just changing shade.
-function cellScale(volume: number, max: number): number {
-  if (max === 0 || volume <= 0) return 1;
-  const ratio = volume / max;
-  if (ratio > 0.75) return 1.35;
-  if (ratio > 0.4) return 1.15;
-  return 1;
-}
-
 function formatUsd(value: number): string {
   if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
   if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
@@ -88,7 +78,7 @@ export function HeatmapGrid({
         </span>
       </div>
 
-      {/* Scan line — sweeps left to right continuously to signal the tape
+      {/* Scan line — sweeps left to right continuously to signal the heatmap
           is being actively watched, not a dead snapshot. */}
       <div className="relative overflow-hidden rounded-lg">
         <div className="scan-line" />
@@ -104,19 +94,17 @@ export function HeatmapGrid({
                   const isSelected = selected?.day === dayIndex && selected?.hour === hour;
                   const isNow = dayIndex === currentDay && hour === currentHour;
                   const isPeak = key === peakKey && peakVolume > 0;
-                  const scale = cellScale(volume, maxVolume);
 
                   return (
                     <button
                       key={hour}
                       onClick={() => setSelected({ day: dayIndex, hour, volume })}
-                      className={`flex-1 rounded transition-all hover:z-10 ${
+                      className={`flex-1 rounded transition-colors hover:z-10 hover:brightness-125 ${
                         isPeak ? "peak-cell" : ""
                       } ${isNow ? "now-cell" : ""}`}
                       style={{
                         height: "22px",
                         background: intensityColor(volume, maxVolume),
-                        transform: `scale(${scale})`,
                         outline: isSelected ? "2px solid #F5A623" : "none",
                         outlineOffset: "1px",
                         boxShadow: isPeak ? "0 0 12px 2px rgba(245, 166, 35, 0.55)" : "none",
@@ -186,11 +174,10 @@ export function HeatmapGrid({
         <div style={{ width: 22, height: 22, borderRadius: 4, background: "#5a3d14" }} />
         <div style={{ width: 22, height: 22, borderRadius: 4, background: "#a8701c" }} />
         <div style={{ width: 22, height: 22, borderRadius: 4, background: "#F5A623" }} />
-        <span>busy tape</span>
+        <span>rame tape</span>
       </div>
 
       <AddressModal state={addressModal.state} onClose={addressModal.close} />
     </div>
   );
 }
-
