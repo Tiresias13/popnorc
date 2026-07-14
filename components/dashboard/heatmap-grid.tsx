@@ -174,7 +174,7 @@ export function HeatmapGrid({
         <div style={{ width: 22, height: 22, borderRadius: 4, background: "#5a3d14" }} />
         <div style={{ width: 22, height: 22, borderRadius: 4, background: "#a8701c" }} />
         <div style={{ width: 22, height: 22, borderRadius: 4, background: "#F5A623" }} />
-        <span>rame tape</span>
+        <span>crowded tape</span>
       </div>
 
       <AddressModal state={addressModal.state} onClose={addressModal.close} />
