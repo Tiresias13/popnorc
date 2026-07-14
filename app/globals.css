@@ -30,3 +30,52 @@ body {
   background: radial-gradient(circle, rgba(245, 166, 35, 0.35) 0%, rgba(245, 166, 35, 0) 70%);
   filter: blur(40px);
 }
+
+/* Heatmap radar sweep — like a submarine sonar scan, signals live
+   monitoring instead of a dead snapshot. Wide glowing beam with a soft
+   trailing fade, blended with the cells it passes over. */
+.scan-line {
+  position: absolute;
+  top: 0;
+  left: -140px;
+  width: 140px;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    rgba(245, 166, 35, 0) 0%,
+    rgba(245, 166, 35, 0.06) 55%,
+    rgba(245, 166, 35, 0.22) 85%,
+    rgba(245, 166, 35, 0.4) 100%
+  );
+  mix-blend-mode: screen;
+  animation: scan-sweep 4.5s linear infinite;
+  pointer-events: none;
+  z-index: 5;
+}
+
+@keyframes scan-sweep {
+  0% {
+    left: -140px;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+.peak-cell {
+  animation: peak-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes peak-pulse {
+  0%, 100% {
+    box-shadow: 0 0 8px 1px rgba(245, 166, 35, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 16px 4px rgba(245, 166, 35, 0.8);
+  }
+}
+
+.now-cell {
+  outline: 2px solid #10b981 !important;
+  outline-offset: 1px;
+}
