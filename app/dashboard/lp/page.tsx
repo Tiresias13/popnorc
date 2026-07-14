@@ -32,39 +32,38 @@ export default async function LpMonitorPage() {
 
   return (
     <>
-      <main className="flex-1 overflow-y-auto">
-        <div className="flex items-center justify-between px-4 md:px-8 py-5 border-b border-[#E4E4E7]">
+      <main className="flex-1 overflow-y-auto bg-[#0A0A0B]">
+        <div className="flex items-center justify-between px-4 md:px-8 py-5 border-b border-[#1F1F22]">
           <div>
-            <h1 className="text-xl font-semibold">LP Quality Monitor</h1>
+            <h1 className="text-xl font-semibold text-white">lp monitor</h1>
             <p className="text-sm text-gray-500 mt-0.5">
-              Tracking {totalPools} active pools on Robinhood Chain
+              watching {totalPools} pools on robinhood chain, live
             </p>
           </div>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-4 md:px-8 py-6">
-          <div className="bg-white border border-[#E4E4E7] rounded-xl p-4">
-            <p className="text-xs text-gray-500 mb-1">Total Pools Tracked</p>
-            <p className="text-2xl font-bold mono">{totalPools}</p>
+          <div className="bg-[#131315] border border-[#1F1F22] rounded-xl p-4">
+            <p className="text-xs text-gray-500 mb-1">pools tracked</p>
+            <p className="text-2xl font-bold mono text-white">{totalPools}</p>
           </div>
-          <div className="bg-white border border-[#E4E4E7] rounded-xl p-4">
-            <p className="text-xs text-gray-500 mb-1">High Risk</p>
-            <p className="text-2xl font-bold mono text-red-600">{highRisk}</p>
+          <div className="bg-[#131315] border border-[#1F1F22] rounded-xl p-4">
+            <p className="text-xs text-gray-500 mb-1">high risk</p>
+            <p className="text-2xl font-bold mono text-red-400">{highRisk}</p>
           </div>
-          <div className="bg-white border border-[#E4E4E7] rounded-xl p-4">
-            <p className="text-xs text-gray-500 mb-1">RWA Tokens</p>
-            <p className="text-2xl font-bold mono text-emerald-600">{verifiedCount}</p>
+          <div className="bg-[#131315] border border-[#1F1F22] rounded-xl p-4">
+            <p className="text-xs text-gray-500 mb-1">rwa tokens</p>
+            <p className="text-2xl font-bold mono text-emerald-400">{verifiedCount}</p>
           </div>
-          <div className="bg-white border border-[#E4E4E7] rounded-xl p-4 shadow-[0_4px_24px_rgba(245,166,35,0.15)]">
-            <p className="text-xs text-gray-500 mb-1">Avg Liquidity</p>
-            <p className="text-2xl font-bold mono text-[#B45309]">{formatUsd(avgLiquidity)}</p>
+          <div className="bg-[#131315] border border-[rgba(245,166,35,0.3)] rounded-xl p-4">
+            <p className="text-xs text-gray-500 mb-1">avg liquidity</p>
+            <p className="text-2xl font-bold mono text-[#F5A623]">{formatUsd(avgLiquidity)}</p>
           </div>
         </div>
 
         <LpMonitorTabs pools={typedPools} />
       </main>
-      <DashboardFooter lastSyncedAt={lastSynced} />
+      <DashboardFooter lastSyncedAt={lastSynced} dark />
     </>
   );
 }
-
