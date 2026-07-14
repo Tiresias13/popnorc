@@ -6,11 +6,11 @@ import { useEffect, useState } from "react";
 import { Logo } from "@/components/ui/logo";
 
 const NAV_ITEMS = [
-  { href: "/dashboard/lp", label: "LP Quality Monitor" },
-  { href: "/dashboard/lp-strategy", label: "LP Strategy" },
-  { href: "/dashboard/imposter", label: "Imposter Detector" },
-  { href: "/dashboard/smart-money", label: "Smart Money" },
-  { href: "/dashboard/heatmap", label: "Volume Heatmap" },
+  { href: "/dashboard/lp", label: "lp monitor" },
+  { href: "/dashboard/lp-strategy", label: "lp strategy" },
+  { href: "/dashboard/imposter", label: "imposter detector" },
+  { href: "/dashboard/smart-money", label: "smart money" },
+  { href: "/dashboard/heatmap", label: "the heatmap" },
 ];
 
 export function Sidebar() {
@@ -82,7 +82,7 @@ export function Sidebar() {
                 );
               })}
             </nav>
-            <div className="mt-auto text-xs text-gray-600 mono">v0.1 — live on Robinhood</div>
+            <div className="mt-auto text-xs text-gray-600 mono">v0.1 — live on robinhood chain</div>
           </aside>
         </div>
       )}
@@ -110,9 +110,8 @@ export function Sidebar() {
             );
           })}
         </nav>
-        <div className="mt-auto text-xs text-gray-600 mono">v0.1 — live on Robinhood</div>
+        <div className="mt-auto text-xs text-gray-600 mono">v0.1 — live on robinhood chain</div>
       </aside>
     </>
   );
 }
-
