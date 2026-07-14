@@ -47,12 +47,12 @@ export default async function LpStrategyPage() {
 
   return (
     <>
-      <main className="flex-1 overflow-y-auto">
-        <div className="flex items-center justify-between px-4 md:px-8 py-5 border-b border-[#E4E4E7]">
+      <main className="flex-1 overflow-y-auto bg-[#0A0A0B]">
+        <div className="flex items-center justify-between px-4 md:px-8 py-5 border-b border-[#1F1F22]">
           <div>
-            <h1 className="text-xl font-semibold">LP Strategy</h1>
+            <h1 className="text-xl font-semibold text-white">lp strategy</h1>
             <p className="text-sm text-gray-500 mt-0.5">
-              Pools worth adding liquidity to, classified by holding horizon
+              pools worth aping liquidity into, sorted by how long you're willing to hold
             </p>
           </div>
         </div>
@@ -61,8 +61,7 @@ export default async function LpStrategyPage() {
           <LpStrategyTabs pools={typedPools} smartMoneySignal={smartMoneySignal} minSignalUsd={MIN_SIGNAL_USD} />
         </div>
       </main>
-      <DashboardFooter lastSyncedAt={lastSynced} />
+      <DashboardFooter lastSyncedAt={lastSynced} dark />
     </>
   );
 }
-
