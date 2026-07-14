@@ -10,15 +10,34 @@ function formatUsd(value: number): string {
   return `$${value.toFixed(0)}`;
 }
 
+interface HeatmapAggregateRow {
+  day_of_week: number;
+  hour_of_day: number;
+  total_volume_usd: number;
+  top_tokens: string[];
+}
+
+interface CategoryTotalRow {
+  category: string;
+  total_volume_usd: number;
+}
+
 export default async function HeatmapPage() {
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const sinceDate = sevenDaysAgo.toISOString().split("T")[0];
 
-  const [{ data: snapshots }, { data: activity }] = await Promise.all([
-    supabase
-      .from("volume_snapshots")
-      .select("day_of_week, hour_of_day, volume_usd, category, token_symbol")
-      .gte("snapshot_date", sevenDaysAgo.toISOString().split("T")[0]),
+  // Both aggregations run as SQL (SUM + top-2-token ranking) inside
+  // Postgres via RPC, instead of fetching raw volume_snapshots rows and
+  // summing them in JS. Raw-row fetching silently truncated at
+  // PostgREST's default 1000-row cap once the table grew past a few
+  // hours of 15-minute cron snapshots — this made recent hours "go dark"
+  // even though the data existed. Aggregating in the DB keeps the
+  // response small (at most 168 rows) no matter how large the raw table
+  // gets.
+  const [{ data: aggregateRows }, { data: categoryRows }, { data: activity }] = await Promise.all([
+    supabase.rpc("heatmap_aggregate", { since_date: sinceDate }),
+    supabase.rpc("heatmap_category_totals", { since_date: sinceDate }),
     supabase
       .from("wallet_activity")
       .select("wallet_address, action, token_symbol, amount_usd, occurred_at")
@@ -26,34 +45,21 @@ export default async function HeatmapPage() {
   ]);
 
   const grid: Record<string, number> = {};
-  const tokenBreakdown: Record<string, Record<string, number>> = {};
-  let rwaVolume = 0;
-  let memeVolume = 0;
-  let otherVolume = 0;
+  const topTokensByCell: Record<string, string[]> = {};
 
-  for (const row of snapshots || []) {
+  for (const row of (aggregateRows || []) as HeatmapAggregateRow[]) {
     const key = `${row.day_of_week}-${row.hour_of_day}`;
-    const vol = Number(row.volume_usd || 0);
-    grid[key] = (grid[key] || 0) + vol;
-
-    if (row.token_symbol && vol > 0) {
-      if (!tokenBreakdown[key]) tokenBreakdown[key] = {};
-      tokenBreakdown[key][row.token_symbol] = (tokenBreakdown[key][row.token_symbol] || 0) + vol;
+    grid[key] = Number(row.total_volume_usd || 0);
+    if (row.top_tokens && row.top_tokens.length > 0) {
+      topTokensByCell[key] = row.top_tokens;
     }
-
-    if (row.category === "rwa") rwaVolume += vol;
-    else if (row.category === "other") otherVolume += vol;
-    else memeVolume += vol;
   }
 
-  // Reduce each cell's token breakdown to its top 2 symbols, for the
-  // "dominated by X & Y" insight line on click.
-  const topTokensByCell: Record<string, string[]> = {};
-  for (const [key, symbols] of Object.entries(tokenBreakdown)) {
-    topTokensByCell[key] = Object.entries(symbols)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 2)
-      .map(([symbol]) => symbol);
+  let rwaVolume = 0;
+  let memeVolume = 0;
+  for (const row of (categoryRows || []) as CategoryTotalRow[]) {
+    if (row.category === "rwa") rwaVolume += Number(row.total_volume_usd || 0);
+    else if (row.category !== "other") memeVolume += Number(row.total_volume_usd || 0);
   }
 
   // Find the single biggest real transaction per day+hour bucket, from real
