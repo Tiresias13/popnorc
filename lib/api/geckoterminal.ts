@@ -36,11 +36,20 @@ interface GeckoPoolsResponse {
 }
 
 // Fetches trending/top pools for the configured network, sorted by GeckoTerminal's default order.
-export async function fetchPools(page = 1): Promise<GeckoPool[]> {
+// Retries once on a 429 (rate limit) with a short backoff, since the free
+// tier rejects requests that land too close together — a single retry is
+// enough in practice and keeps the paginated fetch loop in the snapshot
+// cron from aborting early just because one page got rate-limited.
+export async function fetchPools(page = 1, attempt = 0): Promise<GeckoPool[]> {
   const res = await fetch(`${BASE_URL}/networks/${NETWORK}/pools?page=${page}`, {
     headers: { Accept: "application/json" },
     next: { revalidate: 0 },
   });
+
+  if (res.status === 429 && attempt < 3) {
+    await new Promise((resolve) => setTimeout(resolve, 4000 * (attempt + 1)));
+    return fetchPools(page, attempt + 1);
+  }
 
   if (!res.ok) {
     throw new Error(`GeckoTerminal fetchPools failed: ${res.status}`);
