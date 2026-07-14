@@ -15,7 +15,7 @@ const FEATURES = [
     desc: "Ranks real wallets by real holdings in real traded tokens — not stablecoins, not dust. See who's buying and who's dumping.",
   },
   {
-    name: "the tape (Volume Heatmap)",
+    name: "the heatmap (Volume Heatmap)",
     desc: "Day-by-hour volume grid so you know exactly when the chain actually gets busy, instead of guessing.",
   },
 ];
@@ -76,4 +76,3 @@ export default function AboutPage() {
     </>
   );
 }
-
