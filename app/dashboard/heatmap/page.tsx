@@ -97,7 +97,7 @@ export default async function HeatmapPage() {
         <div className="flex items-center justify-between px-4 md:px-8 py-5 border-b border-[#1F1F22]">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-semibold text-white">the tape</h1>
+              <h1 className="text-xl font-semibold text-white">the heatmap</h1>
               <span className="flex items-center gap-1.5 text-[10px] font-semibold text-emerald-400 mono uppercase tracking-wide">
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
@@ -125,7 +125,7 @@ export default async function HeatmapPage() {
               <div className="text-center text-gray-500 py-16">
                 <p className="text-sm font-medium text-gray-300 mb-1">nothing cooking yet.</p>
                 <p className="text-xs text-gray-500 max-w-sm mx-auto">
-                  the tape fills in as data syncs over the next few hours. check back soon.
+                  the heatmap fills in as data syncs over the next few hours. check back soon.
                 </p>
               </div>
             )}
