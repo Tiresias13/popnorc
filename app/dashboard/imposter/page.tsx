@@ -7,25 +7,25 @@ export const dynamic = "force-dynamic";
 function statusStyles(status: string) {
   if (status === "verified") {
     return {
-      cardClass: "bg-white border-[#E4E4E7]",
-      badgeClass: "bg-emerald-50 text-emerald-600",
-      label: "✓ Verified",
-      iconBg: "bg-blue-50 text-blue-600",
+      cardClass: "bg-[#131315] border-[#1F1F22]",
+      badgeClass: "bg-emerald-500/10 text-emerald-400",
+      label: "✓ verified",
+      iconBg: "bg-blue-500/10 text-blue-400",
     };
   }
   if (status === "imposter") {
     return {
-      cardClass: "bg-red-50/50 border-red-200",
-      badgeClass: "bg-red-50 text-red-600",
-      label: "⚠ Imposter",
-      iconBg: "bg-red-50 text-red-600",
+      cardClass: "bg-[rgba(248,113,113,0.06)] border-[rgba(248,113,113,0.3)]",
+      badgeClass: "bg-red-500/10 text-red-400",
+      label: "⚠ imposter",
+      iconBg: "bg-red-500/10 text-red-400",
     };
   }
   return {
-    cardClass: "bg-amber-50/40 border-amber-200",
-    badgeClass: "bg-amber-50 text-amber-600",
-    label: "? Reviewing",
-    iconBg: "bg-amber-50 text-amber-600",
+    cardClass: "bg-[rgba(251,191,36,0.05)] border-[rgba(251,191,36,0.25)]",
+    badgeClass: "bg-amber-500/10 text-amber-400",
+    label: "? reviewing",
+    iconBg: "bg-amber-500/10 text-amber-400",
   };
 }
 
@@ -42,12 +42,12 @@ export default async function ImposterDetectorPage() {
 
   return (
     <>
-      <main className="flex-1 overflow-y-auto">
-        <div className="flex items-center justify-between px-4 md:px-8 py-5 border-b border-[#E4E4E7]">
+      <main className="flex-1 overflow-y-auto bg-[#0A0A0B]">
+        <div className="flex items-center justify-between px-4 md:px-8 py-5 border-b border-[#1F1F22]">
           <div>
-            <h1 className="text-xl font-semibold">Imposter Ticker Detector</h1>
+            <h1 className="text-xl font-semibold text-white">imposter detector</h1>
             <p className="text-sm text-gray-500 mt-0.5">
-              {imposterCount} imposter token{imposterCount === 1 ? "" : "s"} flagged
+              {imposterCount} fake ticker{imposterCount === 1 ? "" : "s"} caught so far
             </p>
           </div>
         </div>
@@ -68,7 +68,7 @@ export default async function ImposterDetectorPage() {
                       {token.symbol.charAt(0)}
                     </div>
                     <div>
-                      <p className="font-semibold">{token.symbol}</p>
+                      <p className="font-semibold text-white">{token.symbol}</p>
                       <p className="text-xs text-gray-500 mono">
                         {token.token_address.slice(0, 6)}...
                         {token.token_address.slice(-4)}
@@ -81,20 +81,20 @@ export default async function ImposterDetectorPage() {
                 </div>
                 <div className="space-y-2 text-xs text-gray-500">
                   <div className="flex justify-between">
-                    <span>Matches official docs</span>
-                    <span>{token.matches_official_docs ? "Yes" : "No"}</span>
+                    <span>matches official docs</span>
+                    <span className="text-gray-300">{token.matches_official_docs ? "yes" : "no"}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Name similarity</span>
-                    <span>{token.name_similarity_score ?? "—"}%</span>
+                    <span>name similarity</span>
+                    <span className="text-gray-300">{token.name_similarity_score ?? "—"}%</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Liquidity locked</span>
-                    <span>{token.liquidity_locked_pct ?? "—"}%</span>
+                    <span>liquidity locked</span>
+                    <span className="text-gray-300">{token.liquidity_locked_pct ?? "—"}%</span>
                   </div>
                 </div>
                 {token.flagged_reason && (
-                  <p className="text-[11px] text-gray-500 mt-3 border-t border-gray-200 pt-2">
+                  <p className="text-[11px] text-gray-500 mt-3 border-t border-[#1F1F22] pt-2">
                     {token.flagged_reason}
                   </p>
                 )}
@@ -102,18 +102,17 @@ export default async function ImposterDetectorPage() {
             );
           })}
           {typedTokens.length === 0 && (
-            <div className="col-span-3 text-center text-gray-400 py-16">
-              <p className="text-sm font-medium text-gray-500 mb-1">No imposters detected — yet.</p>
-              <p className="text-xs text-gray-400 max-w-sm mx-auto">
-                This view only populates once a tokenized-stock ticker (ending in "-hood") shows up
-                in the tracked pools. Nothing suspicious has surfaced so far.
+            <div className="col-span-3 text-center text-gray-500 py-16">
+              <p className="text-sm font-medium text-gray-300 mb-1">nothing sus yet.</p>
+              <p className="text-xs text-gray-500 max-w-sm mx-auto">
+                this fills in once a tokenized-stock ticker (ending in "-hood") shows up in the
+                tracked pools. nothing suspicious has surfaced so far.
               </p>
             </div>
           )}
         </div>
       </main>
-      <DashboardFooter lastSyncedAt={lastSynced} />
+      <DashboardFooter lastSyncedAt={lastSynced} dark />
     </>
   );
 }
-
