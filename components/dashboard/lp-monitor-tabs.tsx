@@ -2,16 +2,15 @@
 
 import { useMemo, useState } from "react";
 import { Pool, TokenCategory } from "@/types/database";
-import { Badge } from "@/components/dashboard/badge";
 import { AddressModal, useAddressModal } from "@/components/dashboard/address-modal";
 
 const PAGE_SIZE = 10;
 
 const CATEGORY_TABS: { key: TokenCategory | "all"; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "rwa", label: "RWA" },
-  { key: "meme", label: "Meme" },
-  { key: "other", label: "Other" },
+  { key: "all", label: "all" },
+  { key: "rwa", label: "rwa" },
+  { key: "meme", label: "meme" },
+  { key: "other", label: "other" },
 ];
 
 function formatUsd(value: number | null): string {
@@ -21,17 +20,14 @@ function formatUsd(value: number | null): string {
   return `$${value.toFixed(0)}`;
 }
 
-function riskTone(level: string): "emerald" | "amber" | "red" | "gray" {
-  if (level === "low") return "emerald";
-  if (level === "medium") return "amber";
-  if (level === "high") return "red";
-  return "gray";
+function riskRowStyle(level: string): string {
+  if (level === "high") return "bg-[rgba(248,113,113,0.08)] border-[rgba(248,113,113,0.35)]";
+  return "bg-[#131315] border-[#1F1F22]";
 }
 
-function categoryTone(category: string): "blue" | "purple" | "gray" {
-  if (category === "rwa") return "blue";
-  if (category === "meme") return "purple";
-  return "gray";
+function riskTextColor(level: string): string {
+  if (level === "high") return "text-red-400";
+  return "text-gray-200";
 }
 
 export function LpMonitorTabs({ pools }: { pools: Pool[] }) {
@@ -70,8 +66,8 @@ export function LpMonitorTabs({ pools }: { pools: Pool[] }) {
               onClick={() => selectTab(tab.key)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
                 active
-                  ? "bg-[#0A0A0B] text-white"
-                  : "bg-white border border-[#E4E4E7] text-gray-600 hover:border-gray-300"
+                  ? "bg-[#F5A623] text-black"
+                  : "bg-[#131315] border border-[#1F1F22] text-gray-400 hover:border-gray-600"
               }`}
             >
               {tab.label} ({counts[tab.key] ?? 0})
@@ -81,83 +77,80 @@ export function LpMonitorTabs({ pools }: { pools: Pool[] }) {
       </div>
 
       <div className="px-4 md:px-8 pb-8">
-        <div className="bg-white border border-[#E4E4E7] rounded-xl overflow-x-auto">
-          <table className="w-full min-w-[640px] text-sm">
-            <thead>
-              <tr className="text-left text-gray-500 border-b border-[#E4E4E7] text-xs uppercase tracking-wide">
-                <th className="px-5 py-3 font-medium">Token</th>
-                <th className="px-5 py-3 font-medium">Category</th>
-                <th className="px-5 py-3 font-medium">Pool</th>
-                <th className="px-5 py-3 font-medium">Liquidity</th>
-                <th className="px-5 py-3 font-medium">24h Volume</th>
-                <th className="px-5 py-3 font-medium">Risk Score</th>
-              </tr>
-            </thead>
-            <tbody className="mono text-[13px]">
-              {pageItems.map((pool) => (
-                <tr
-                  key={pool.pool_address}
-                  className="border-b border-[#F0F0F1] last:border-0 hover:bg-gray-50"
+        <div className="flex flex-col gap-2">
+          {pageItems.map((pool) => (
+            <div
+              key={pool.pool_address}
+              className={`rounded-xl border px-4 py-3 ${riskRowStyle(pool.risk_level)}`}
+            >
+              <div className="flex items-center justify-between mb-2.5">
+                <button
+                  onClick={() => addressModal.open("token", pool.base_token_address)}
+                  className="flex items-center gap-2 text-white font-semibold text-sm hover:text-[#F5A623]"
                 >
-                  <td className="px-5 py-3.5 font-sans font-medium">
-                    <button
-                      onClick={() => addressModal.open("token", pool.base_token_address)}
-                      className="hover:underline hover:text-[#B45309]"
-                    >
-                      {pool.base_token_symbol}
-                    </button>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <Badge tone={categoryTone(pool.category)}>{pool.category.toUpperCase()}</Badge>
-                  </td>
-                  <td className="px-5 py-3.5 text-gray-500">
-                    <button
-                      onClick={() => addressModal.open("pool", pool.pool_address)}
-                      className="hover:underline hover:text-[#B45309]"
-                    >
-                      {pool.pool_name}
-                    </button>
-                  </td>
-                  <td className="px-5 py-3.5">{formatUsd(pool.liquidity_usd)}</td>
-                  <td className="px-5 py-3.5">{formatUsd(pool.volume_24h_usd)}</td>
-                  <td className="px-5 py-3.5">
-                    <Badge tone={riskTone(pool.risk_level)}>
-                      {pool.risk_level} · {pool.risk_score}
-                    </Badge>
-                  </td>
-                </tr>
-              ))}
-              {pageItems.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-5 py-10 text-center text-gray-400 font-sans">
-                    No pools in this category yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                  <span className="w-7 h-7 rounded-full bg-[#1F1F22] flex items-center justify-center text-[11px] font-bold text-gray-400 shrink-0">
+                    {pool.base_token_symbol?.charAt(0) ?? "?"}
+                  </span>
+                  {pool.base_token_symbol}
+                </button>
+                <span className="text-[11px] font-medium uppercase tracking-wide text-gray-200">
+                  {pool.category}
+                </span>
+              </div>
+              <div className="flex justify-between text-right gap-2">
+                <div className="flex flex-col gap-0.5 text-left">
+                  <span className="text-[10px] uppercase tracking-wide text-gray-500">pool</span>
+                  <button
+                    onClick={() => addressModal.open("pool", pool.pool_address)}
+                    className="mono text-xs text-gray-400 hover:text-[#F5A623] hover:underline text-left"
+                  >
+                    {pool.pool_name}
+                  </button>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[10px] uppercase tracking-wide text-gray-500">liquidity</span>
+                  <span className="mono text-xs text-gray-200">{formatUsd(pool.liquidity_usd)}</span>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[10px] uppercase tracking-wide text-gray-500">24h vol</span>
+                  <span className="mono text-xs text-gray-200">{formatUsd(pool.volume_24h_usd)}</span>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[10px] uppercase tracking-wide text-gray-500">risk</span>
+                  <span className={`mono text-xs font-medium ${riskTextColor(pool.risk_level)}`}>
+                    {pool.risk_level} · {pool.risk_score}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+          {pageItems.length === 0 && (
+            <div className="rounded-xl border border-[#1F1F22] bg-[#131315] px-5 py-10 text-center text-gray-500 font-sans text-sm">
+              nothing here yet.
+            </div>
+          )}
         </div>
 
         {totalPages > 1 && (
-          <div className="flex items-center justify-between mt-4 text-sm text-gray-500 font-sans">
+          <div className="flex items-center justify-between mt-4 text-sm text-gray-400 font-sans">
             <span>
-              Page {currentPage} of {totalPages} — {filtered.length} pool
+              page {currentPage} of {totalPages} — {filtered.length} pool
               {filtered.length === 1 ? "" : "s"}
             </span>
             <div className="flex gap-2">
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                className="px-3 py-1.5 rounded-lg border border-[#E4E4E7] bg-white disabled:opacity-40 disabled:cursor-not-allowed hover:border-gray-300"
+                className="px-3 py-1.5 rounded-lg border border-[#1F1F22] bg-[#131315] text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed hover:border-gray-600"
               >
-                Previous
+                previous
               </button>
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}
-                className="px-3 py-1.5 rounded-lg border border-[#E4E4E7] bg-white disabled:opacity-40 disabled:cursor-not-allowed hover:border-gray-300"
+                className="px-3 py-1.5 rounded-lg border border-[#1F1F22] bg-[#131315] text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed hover:border-gray-600"
               >
-                Next
+                next
               </button>
             </div>
           </div>
@@ -168,4 +161,3 @@ export function LpMonitorTabs({ pools }: { pools: Pool[] }) {
     </div>
   );
 }
-
