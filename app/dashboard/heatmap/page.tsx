@@ -93,12 +93,12 @@ export default async function HeatmapPage() {
 
   return (
     <>
-      <main className="flex-1 overflow-y-auto">
-        <div className="flex items-center justify-between px-4 md:px-8 py-5 border-b border-[#E4E4E7]">
+      <main className="flex-1 overflow-y-auto bg-[#0A0A0B]">
+        <div className="flex items-center justify-between px-4 md:px-8 py-5 border-b border-[#1F1F22]">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-semibold">the tape</h1>
-              <span className="flex items-center gap-1.5 text-[10px] font-semibold text-emerald-600 mono uppercase tracking-wide">
+              <h1 className="text-xl font-semibold text-white">the tape</h1>
+              <span className="flex items-center gap-1.5 text-[10px] font-semibold text-emerald-400 mono uppercase tracking-wide">
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
@@ -113,7 +113,7 @@ export default async function HeatmapPage() {
         </div>
 
         <div className="px-4 md:px-8 py-6">
-          <div className="bg-white border border-[#E4E4E7] rounded-xl p-6">
+          <div className="bg-[#131315] border border-[#1F1F22] rounded-xl p-6">
             {hasData ? (
               <HeatmapGrid
                 grid={grid}
@@ -122,9 +122,9 @@ export default async function HeatmapPage() {
                 moverByCell={moverByCell}
               />
             ) : (
-              <div className="text-center text-gray-400 py-16">
-                <p className="text-sm font-medium text-gray-500 mb-1">nothing cooking yet.</p>
-                <p className="text-xs text-gray-400 max-w-sm mx-auto">
+              <div className="text-center text-gray-500 py-16">
+                <p className="text-sm font-medium text-gray-300 mb-1">nothing cooking yet.</p>
+                <p className="text-xs text-gray-500 max-w-sm mx-auto">
                   the tape fills in as data syncs over the next few hours. check back soon.
                 </p>
               </div>
@@ -133,24 +133,23 @@ export default async function HeatmapPage() {
         </div>
 
         <div className="px-4 md:px-8 pb-8 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white border border-[#E4E4E7] rounded-xl p-4">
+          <div className="bg-[#131315] border border-[#1F1F22] rounded-xl p-4">
             <p className="text-xs text-gray-500 mb-1">peak hour (utc)</p>
-            <p className="text-xl font-bold mono text-[#B45309]">
+            <p className="text-xl font-bold mono text-[#F5A623]">
               {peakHour !== null ? `${peakHour}:00–${peakHour + 1}:00` : "—"}
             </p>
           </div>
-          <div className="bg-white border border-[#E4E4E7] rounded-xl p-4">
+          <div className="bg-[#131315] border border-[#1F1F22] rounded-xl p-4">
             <p className="text-xs text-gray-500 mb-1">rwa volume (7d)</p>
-            <p className="text-xl font-bold mono">{formatUsd(rwaVolume)}</p>
+            <p className="text-xl font-bold mono text-white">{formatUsd(rwaVolume)}</p>
           </div>
-          <div className="bg-white border border-[#E4E4E7] rounded-xl p-4">
+          <div className="bg-[#131315] border border-[#1F1F22] rounded-xl p-4">
             <p className="text-xs text-gray-500 mb-1">meme volume (7d)</p>
-            <p className="text-xl font-bold mono">{formatUsd(memeVolume)}</p>
+            <p className="text-xl font-bold mono text-white">{formatUsd(memeVolume)}</p>
           </div>
         </div>
       </main>
-      <DashboardFooter lastSyncedAt={null} />
+      <DashboardFooter lastSyncedAt={null} dark />
     </>
   );
 }
-
