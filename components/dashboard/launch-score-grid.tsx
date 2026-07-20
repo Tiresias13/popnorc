@@ -3,42 +3,36 @@
 import { useState } from "react";
 
 const DAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+const MIN_SAMPLE_SIZE = 5;
 
-function intensityColor(score: number, max: number): string {
-  if (max === 0) return "#1c1c1c";
-  const ratio = score / max;
-  if (ratio < 0.05) return "#1c1c1c";
-  if (ratio < 0.3) return "#14442f";
-  if (ratio < 0.65) return "#1c7a4f";
+function intensityColor(rate: number, hasEnoughData: boolean): string {
+  if (!hasEnoughData) return "#1c1c1c";
+  if (rate < 0.05) return "#1c1c1c";
+  if (rate < 0.15) return "#14442f";
+  if (rate < 0.3) return "#1c7a4f";
   return "#34D399";
-}
-
-function formatUsd(value: number): string {
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
-  return `$${value.toFixed(0)}`;
 }
 
 interface Cell {
   day: number;
   hour: number;
-  volume: number;
   deploymentCount: number;
-  launchScore: number;
+  graduatedCount: number;
+  graduationRate: number;
 }
 
 export interface LaunchScoreGridEntry {
   dayOfWeek: number;
   hourOfDay: number;
-  totalVolumeUsd: number;
   deploymentCount: number;
-  launchScore: number;
+  graduatedCount: number;
+  graduationRate: number;
 }
 
 // Grid version of the launch-window data — same 7x24 layout as the volume
-// heatmap, but cell intensity is driven by launch_score (volume ÷
-// competing launches) instead of raw volume, so a quiet-but-uncontested
-// hour can visually stand out even if its dollar volume is modest.
+// heatmap, but cell intensity is driven by actual graduation_rate
+// (graduated ÷ deployed) instead of raw volume, so hours that reliably
+// produce successful launches stand out, not just busy hours.
 export function LaunchScoreGrid({ entries }: { entries: LaunchScoreGridEntry[] }) {
   const [selected, setSelected] = useState<Cell | null>(null);
 
@@ -47,17 +41,15 @@ export function LaunchScoreGrid({ entries }: { entries: LaunchScoreGridEntry[] }
     grid[`${e.dayOfWeek}-${e.hourOfDay}`] = e;
   }
 
-  const maxScore = Math.max(0, ...entries.map((e) => e.launchScore));
-
   const now = new Date();
   const currentDay = now.getUTCDay();
   const currentHour = now.getUTCHours();
 
   let peakKey = "";
-  let peakScore = 0;
+  let peakRate = 0;
   for (const [key, e] of Object.entries(grid)) {
-    if (e.launchScore > peakScore) {
-      peakScore = e.launchScore;
+    if (e.deploymentCount >= MIN_SAMPLE_SIZE && e.graduationRate > peakRate) {
+      peakRate = e.graduationRate;
       peakKey = key;
     }
   }
@@ -81,10 +73,11 @@ export function LaunchScoreGrid({ entries }: { entries: LaunchScoreGridEntry[] }
                 {Array.from({ length: 24 }, (_, hour) => {
                   const key = `${dayIndex}-${hour}`;
                   const entry = grid[key];
-                  const score = entry?.launchScore || 0;
+                  const hasEnoughData = (entry?.deploymentCount || 0) >= MIN_SAMPLE_SIZE;
+                  const rate = entry?.graduationRate || 0;
                   const isSelected = selected?.day === dayIndex && selected?.hour === hour;
                   const isNow = dayIndex === currentDay && hour === currentHour;
-                  const isPeak = key === peakKey && peakScore > 0;
+                  const isPeak = key === peakKey && peakRate > 0;
 
                   return (
                     <button
@@ -93,9 +86,9 @@ export function LaunchScoreGrid({ entries }: { entries: LaunchScoreGridEntry[] }
                         setSelected({
                           day: dayIndex,
                           hour,
-                          volume: entry?.totalVolumeUsd || 0,
                           deploymentCount: entry?.deploymentCount || 0,
-                          launchScore: score,
+                          graduatedCount: entry?.graduatedCount || 0,
+                          graduationRate: rate,
                         })
                       }
                       className={`flex-1 rounded transition-colors hover:z-10 hover:brightness-125 ${
@@ -103,7 +96,7 @@ export function LaunchScoreGrid({ entries }: { entries: LaunchScoreGridEntry[] }
                       }`}
                       style={{
                         height: "22px",
-                        background: intensityColor(score, maxScore),
+                        background: intensityColor(rate, hasEnoughData),
                         outline: isSelected ? "2px solid #34D399" : "none",
                         outlineOffset: "1px",
                         boxShadow: isPeak ? "0 0 12px 2px rgba(52, 211, 153, 0.55)" : "none",
@@ -136,23 +129,23 @@ export function LaunchScoreGrid({ entries }: { entries: LaunchScoreGridEntry[] }
               {DAYS[selected.day]} · {selected.hour}:00–{selected.hour + 1}:00 utc
             </p>
             <p className="mono text-emerald-400 text-2xl font-bold mt-2">
-              {formatUsd(selected.volume)}
+              {(selected.graduationRate * 100).toFixed(1)}%
             </p>
             <p className="text-xs text-gray-400 mt-2">
-              {selected.deploymentCount} launch{selected.deploymentCount === 1 ? "" : "es"} competing
-              · last 7 days
+              {selected.graduatedCount}/{selected.deploymentCount} tokens graduated · last 7
+              days
             </p>
           </div>
         </div>
       )}
 
       <div className="flex items-center gap-2 mt-5 justify-end text-xs text-gray-500">
-        <span>bad window</span>
+        <span>low graduation</span>
         <div style={{ width: 22, height: 22, borderRadius: 4, background: "#1c1c1c" }} />
         <div style={{ width: 22, height: 22, borderRadius: 4, background: "#14442f" }} />
         <div style={{ width: 22, height: 22, borderRadius: 4, background: "#1c7a4f" }} />
         <div style={{ width: 22, height: 22, borderRadius: 4, background: "#34D399" }} />
-        <span>best window</span>
+        <span>high graduation</span>
       </div>
     </div>
   );
