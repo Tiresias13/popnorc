@@ -49,13 +49,22 @@ async function fetchLogsRaw(
   url.searchParams.set("fromBlock", String(fromBlock));
   url.searchParams.set("toBlock", String(toBlock));
 
-  const res = await fetch(url.toString(), {
-    headers: { Accept: "application/json" },
-    next: { revalidate: 0 },
-  });
+  let res: Response | undefined;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    res = await fetch(url.toString(), {
+      headers: { Accept: "application/json" },
+      next: { revalidate: 0 },
+    });
 
-  if (!res.ok) {
-    throw new Error(`Blockscout getLogs HTTP ${res.status} for ${address} [${fromBlock}-${toBlock}]`);
+    if (res.status !== 429) break;
+
+    // Blockscout rate limits aggressively under repeated/parallel calls —
+    // back off and retry rather than failing the whole cron run outright.
+    await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+  }
+
+  if (!res || !res.ok) {
+    throw new Error(`Blockscout getLogs HTTP ${res?.status} for ${address} [${fromBlock}-${toBlock}]`);
   }
 
   const json: GetLogsResponse = await res.json();
