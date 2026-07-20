@@ -40,6 +40,16 @@ export const LAUNCHPADS: LaunchpadConfig[] = [
   },
 ];
 
+// flap.sh's graduation event lives on the same factory contract as
+// TokenCreated, just a different topic0 — LaunchedToDEX(address token,
+// address pool, uint256 amount, uint256 eth), all non-indexed. Verified
+// live: 169 real graduation events found scanning a wide block range.
+// Pons and bow.fun have no equivalent global event; their graduation
+// status has to be checked per-token via eth_call (see
+// lib/api/blockscout-rpc.ts).
+export const FLAP_GRADUATION_TOPIC0 =
+  "0x6e4f47630b8745b8cacbd44f42a8a33e7eea7cc08ef22fc7630f4f385784ff7d";
+
 export interface DecodedDeployment {
   launchpad: LaunchpadId;
   tokenAddress: string;
@@ -122,4 +132,15 @@ const DECODERS: Record<LaunchpadId, (log: BlockscoutLog) => DecodedDeployment> =
 
 export function decodeDeploymentLog(launchpad: LaunchpadId, log: BlockscoutLog): DecodedDeployment {
   return DECODERS[launchpad](log);
+}
+
+// Decodes a flap.sh LaunchedToDEX log into the graduated token's address.
+// amount/eth aren't needed for graduation tracking, just the token.
+export function decodeFlapGraduationLog(log: BlockscoutLog): { tokenAddress: string; blockNumber: number; graduatedAt: Date } {
+  const [token] = decodeAbiParameters(["address"], log.data);
+  return {
+    tokenAddress: token as string,
+    blockNumber: parseInt(log.blockNumber, 16),
+    graduatedAt: new Date(parseInt(log.timeStamp, 16) * 1000),
+  };
 }
