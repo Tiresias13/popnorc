@@ -51,12 +51,26 @@ export async function GET(req: NextRequest) {
   }
 
   const supabase = createServerClient();
-  const deadline = Date.now() + TIME_BUDGET_MS;
+  const runStart = Date.now();
 
   try {
     const flap = await checkFlapGraduations(supabase);
-    const pons = await checkPerTokenGraduations(supabase, "pons", checkPonsGraduatedWrapper, deadline);
-    const bow = await checkPerTokenGraduations(supabase, "bow", checkBowGraduated, deadline);
+
+    // Split the remaining time budget evenly between Pons and bow.fun so
+    // Pons's much larger backlog (~8,500+ tokens) can't starve bow.fun of
+    // every run's time slice. Each gets a deadline computed relative to
+    // when IT starts, not a shared fixed point from before Pons ran —
+    // otherwise bow.fun's deadline would already be in the past the
+    // moment it starts, since Pons would have consumed its full slice
+    // first.
+    const afterFlapBudget = TIME_BUDGET_MS - (Date.now() - runStart);
+    const halfBudget = Math.max(0, afterFlapBudget / 2);
+
+    const ponsStart = Date.now();
+    const pons = await checkPerTokenGraduations(supabase, "pons", checkPonsGraduatedWrapper, ponsStart + halfBudget);
+
+    const bowStart = Date.now();
+    const bow = await checkPerTokenGraduations(supabase, "bow", checkBowGraduated, bowStart + halfBudget);
 
     return NextResponse.json({
       ok: true,
