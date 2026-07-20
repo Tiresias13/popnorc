@@ -15,16 +15,31 @@ export const maxDuration = 60;
 // whatever the earliest block already stored is, filling in history
 // older than that, down to a target block (default: ~7 days back).
 //
-// Safe to call repeatedly (e.g. manually, a few times) — each call picks
-// up from the earliest block currently in the table and moves the
+// Safe to call repeatedly (manually, many times in a row) — each call
+// picks up from the earliest block currently in the table and moves the
 // window further back, same idempotent upsert-on-tx_hash as the forward
 // cron. Stop calling once a call's `results[x].reachedTarget` is true for
-// all launchpads, or once fetched counts are consistently 0.
+// all launchpads.
 //
-// Not meant to run on a schedule — this is a manual, run-a-few-times op.
-// Query param `blocksPerCall` (default 300000, ~8.4 hours of chain time)
-// controls how far back each call walks, kept small enough to comfortably
-// finish inside Vercel's 60s limit even on dense ranges.
+// IMPORTANT — sizing history: an earlier version defaulted blocksPerCall
+// to 300,000, sized around flap.sh/bow.fun's log density. Pons is much
+// denser AND every Pons log needs a separate fetchTokenInfo lookup (no
+// name/symbol in the event itself, unlike flap.sh) — a 300k-block Pons
+// range can contain 2,000+ unique tokens needing metadata lookups, which
+// blew through Vercel's 60s limit even with batched concurrency. This
+// version uses TWO safeguards instead of trusting a fixed block count to
+// stay cheap:
+//   1. blocksPerCall default is much smaller (20,000, matching the
+//      regular cron's chunk size, which is proven to run comfortably
+//      within the timeout).
+//   2. Metadata lookups are additionally capped by their own time
+//      budget (METADATA_TIME_BUDGET_MS) — if a range still has an
+//      unusually dense token count, remaining tokens are inserted with
+//      null name/symbol rather than blocking the whole request. (name/
+//      symbol are cosmetic — graduation tracking and the heatmap don't
+//      depend on them.)
+//
+// Not meant to run on a schedule — this is a manual, run-many-times op.
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
   const expected = `Bearer ${process.env.CRON_SECRET}`;
@@ -35,8 +50,9 @@ export async function GET(req: NextRequest) {
 
   const supabase = createServerClient();
   const url = new URL(req.url);
-  const blocksPerCall = parseInt(url.searchParams.get("blocksPerCall") || "300000", 10);
+  const blocksPerCall = parseInt(url.searchParams.get("blocksPerCall") || "20000", 10);
   const targetBlocksBack = parseInt(url.searchParams.get("targetBlocksBack") || "5990000", 10); // ~7 days
+  const runDeadline = Date.now() + 45_000;
 
   try {
     const currentBlock = await fetchCurrentBlockNumber();
@@ -48,6 +64,11 @@ export async function GET(req: NextRequest) {
     > = {};
 
     for (const config of LAUNCHPADS) {
+      if (Date.now() >= runDeadline) {
+        results[config.id] = { fetched: 0, inserted: 0, fromBlock: 0, toBlock: 0, reachedTarget: false };
+        continue;
+      }
+
       const { data: earliestRow } = await supabase
         .from("launchpad_deployments")
         .select("block_number")
@@ -74,7 +95,7 @@ export async function GET(req: NextRequest) {
       const logs = await fetchLaunchpadLogs(config.contractAddress, config.topic0, fromBlock, toBlock);
       const decoded = logs.map((log) => decodeDeploymentLog(config.id, log));
 
-      await fillMissingTokenMetadata(decoded);
+      await fillMissingTokenMetadata(decoded, runDeadline);
 
       const rows = decoded.map((d) => {
         const dayOfWeek = d.deployedAt.getUTCDay();
@@ -148,19 +169,28 @@ async function fetchCurrentBlockNumber(): Promise<number> {
 }
 
 // fetchTokenInfo never throws (see lib/api/blockscout.ts), but firing off
-// hundreds of concurrent lookups at once (e.g. on a wide backfill range
-// with many unique Pons/bow.fun tokens) still isn't great for Blockscout's
-// rate limits, so this batches lookups instead of a single unbounded
-// Promise.all.
+// hundreds of concurrent lookups at once (e.g. on a dense Pons range,
+// which unlike flap.sh needs a metadata lookup for every single token)
+// still isn't great for Blockscout's rate limits, so this batches lookups
+// instead of a single unbounded Promise.all — AND respects the shared
+// run deadline, leaving any remaining tokens with null name/symbol rather
+// than risking the whole request timing out. Those tokens still get
+// inserted (graduation tracking doesn't need name/symbol), just without
+// cosmetic metadata; a later backfill call re-decoding the same block
+// range would just no-op on tx_hash conflict anyway, so this isn't
+// "fixed forever as null" in practice, though a targeted metadata-only
+// re-pass isn't implemented here.
 const METADATA_CONCURRENCY = 15;
 
-async function fillMissingTokenMetadata(decoded: DecodedDeployment[]): Promise<void> {
+async function fillMissingTokenMetadata(decoded: DecodedDeployment[], deadline: number): Promise<void> {
   const needsLookup = decoded.filter((d) => !d.tokenSymbol);
   const uniqueAddresses = Array.from(new Set(needsLookup.map((d) => d.tokenAddress)));
 
   const infoByAddress = new Map<string, { symbol: string | null; name: string | null }>();
 
   for (let i = 0; i < uniqueAddresses.length; i += METADATA_CONCURRENCY) {
+    if (Date.now() >= deadline) break;
+
     const batch = uniqueAddresses.slice(i, i + METADATA_CONCURRENCY);
     await Promise.all(
       batch.map(async (addr) => {
