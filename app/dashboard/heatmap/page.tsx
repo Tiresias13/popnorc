@@ -1,7 +1,6 @@
 import { supabase } from "@/lib/supabase/client";
 import { DashboardFooter } from "@/components/dashboard/footer";
 import { HeatmapGrid } from "@/components/dashboard/heatmap-grid";
-import { LaunchWindowCards, LaunchWindow } from "@/components/dashboard/launch-window-cards";
 
 export const dynamic = "force-dynamic";
 
@@ -23,14 +22,6 @@ interface CategoryTotalRow {
   total_volume_usd: number;
 }
 
-interface LaunchScoreRow {
-  day_of_week: number;
-  hour_of_day: number;
-  total_volume_usd: number;
-  deployment_count: number;
-  launch_score: number;
-}
-
 export default async function HeatmapPage() {
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -44,24 +35,14 @@ export default async function HeatmapPage() {
   // even though the data existed. Aggregating in the DB keeps the
   // response small (at most 168 rows) no matter how large the raw table
   // gets.
-  const [{ data: aggregateRows }, { data: categoryRows }, { data: activity }, { data: launchScoreRows }] =
-    await Promise.all([
-      supabase.rpc("heatmap_aggregate", { since_date: sinceDate }),
-      supabase.rpc("heatmap_category_totals", { since_date: sinceDate }),
-      supabase
-        .from("wallet_activity")
-        .select("wallet_address, action, token_symbol, amount_usd, occurred_at")
-        .gte("occurred_at", sevenDaysAgo.toISOString()),
-      supabase.rpc("heatmap_launch_score", { since_date: sinceDate }),
-    ]);
-
-  const launchWindows: LaunchWindow[] = ((launchScoreRows || []) as LaunchScoreRow[]).map((r) => ({
-    dayOfWeek: r.day_of_week,
-    hourOfDay: r.hour_of_day,
-    totalVolumeUsd: Number(r.total_volume_usd || 0),
-    deploymentCount: Number(r.deployment_count || 0),
-    launchScore: Number(r.launch_score || 0),
-  }));
+  const [{ data: aggregateRows }, { data: categoryRows }, { data: activity }] = await Promise.all([
+    supabase.rpc("heatmap_aggregate", { since_date: sinceDate }),
+    supabase.rpc("heatmap_category_totals", { since_date: sinceDate }),
+    supabase
+      .from("wallet_activity")
+      .select("wallet_address, action, token_symbol, amount_usd, occurred_at")
+      .gte("occurred_at", sevenDaysAgo.toISOString()),
+  ]);
 
   const grid: Record<string, number> = {};
   const topTokensByCell: Record<string, string[]> = {};
@@ -122,7 +103,7 @@ export default async function HeatmapPage() {
         <div className="flex items-center justify-between px-4 md:px-8 py-5 border-b border-[#1F1F22]">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-semibold text-white">the heatmap</h1>
+              <h1 className="text-xl font-semibold text-white">volume heatmap</h1>
               <span className="flex items-center gap-1.5 text-[10px] font-semibold text-emerald-400 mono uppercase tracking-wide">
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
@@ -155,10 +136,6 @@ export default async function HeatmapPage() {
               </div>
             )}
           </div>
-        </div>
-
-        <div className="px-4 md:px-8 pb-6">
-          <LaunchWindowCards windows={launchWindows} />
         </div>
 
         <div className="px-4 md:px-8 pb-8 grid grid-cols-1 md:grid-cols-3 gap-4">
