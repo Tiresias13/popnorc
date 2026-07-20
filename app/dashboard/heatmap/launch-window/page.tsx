@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase/client";
 import { DashboardFooter } from "@/components/dashboard/footer";
 import { LaunchWindowCards, LaunchWindow } from "@/components/dashboard/launch-window-cards";
+import { LaunchScoreGrid } from "@/components/dashboard/launch-score-grid";
 
 export const dynamic = "force-dynamic";
 
@@ -56,8 +57,32 @@ export default async function LaunchWindowPage() {
           </div>
         </div>
 
-        <div className="px-4 md:px-8 py-6 pb-8">
+        <div className="px-4 md:px-8 py-6">
           <LaunchWindowCards windows={launchWindows} />
+        </div>
+
+        <div className="px-4 md:px-8 pb-8">
+          {launchWindows.length > 0 ? (
+            <div className="bg-[#131315] border border-[#1F1F22] rounded-xl p-6">
+              <LaunchScoreGrid
+                entries={launchWindows.map((w) => ({
+                  dayOfWeek: w.dayOfWeek,
+                  hourOfDay: w.hourOfDay,
+                  totalVolumeUsd: w.totalVolumeUsd,
+                  deploymentCount: w.deploymentCount,
+                  launchScore: w.launchScore,
+                }))}
+              />
+            </div>
+          ) : (
+            <div className="bg-[#131315] border border-[#1F1F22] rounded-xl p-6 text-center text-gray-500 py-16">
+              <p className="text-sm font-medium text-gray-300 mb-1">nothing cooking yet.</p>
+              <p className="text-xs text-gray-500 max-w-sm mx-auto">
+                the launch heatmap fills in as on-chain deployment data syncs over the next
+                few hours. check back soon.
+              </p>
+            </div>
+          )}
         </div>
       </main>
       <DashboardFooter lastSyncedAt={null} dark />
