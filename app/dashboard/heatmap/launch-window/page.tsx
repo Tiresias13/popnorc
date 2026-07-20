@@ -5,12 +5,12 @@ import { LaunchScoreGrid } from "@/components/dashboard/launch-score-grid";
 
 export const dynamic = "force-dynamic";
 
-interface LaunchScoreRow {
+interface GraduationRateRow {
   day_of_week: number;
   hour_of_day: number;
-  total_volume_usd: number;
   deployment_count: number;
-  launch_score: number;
+  graduated_count: number;
+  graduation_rate: number;
 }
 
 export default async function LaunchWindowPage() {
@@ -18,21 +18,22 @@ export default async function LaunchWindowPage() {
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const sinceDate = sevenDaysAgo.toISOString().split("T")[0];
 
-  // Aggregated in Postgres (see heatmap_launch_score RPC) from real
-  // on-chain launchpad_deployments (flap.sh, Pons, bow.fun — verified
-  // directly via Blockscout getLogs, not GeckoTerminal's top-200 pools,
-  // so this isn't subject to survivorship bias) joined with the existing
-  // volume_snapshots table.
-  const { data: launchScoreRows } = await supabase.rpc("heatmap_launch_score", {
+  // Aggregated in Postgres (see heatmap_graduation_rate RPC) from real
+  // on-chain launchpad_deployments + graduation status (flap.sh via its
+  // LaunchedToDEX event, Pons/bow.fun via per-token eth_call — see
+  // memory/2026-07-20.md for the verification behind this). This is an
+  // actual outcome metric (did tokens launched in this hour succeed),
+  // not a volume/competition proxy.
+  const { data: graduationRows } = await supabase.rpc("heatmap_graduation_rate", {
     since_date: sinceDate,
   });
 
-  const launchWindows: LaunchWindow[] = ((launchScoreRows || []) as LaunchScoreRow[]).map((r) => ({
+  const launchWindows: LaunchWindow[] = ((graduationRows || []) as GraduationRateRow[]).map((r) => ({
     dayOfWeek: r.day_of_week,
     hourOfDay: r.hour_of_day,
-    totalVolumeUsd: Number(r.total_volume_usd || 0),
     deploymentCount: Number(r.deployment_count || 0),
-    launchScore: Number(r.launch_score || 0),
+    graduatedCount: Number(r.graduated_count || 0),
+    graduationRate: Number(r.graduation_rate || 0),
   }));
 
   return (
@@ -51,8 +52,8 @@ export default async function LaunchWindowPage() {
               </span>
             </div>
             <p className="text-sm text-gray-500 mt-0.5">
-              hours with real demand but few competing launches — from on-chain flap.sh,
-              pons, and bow.fun deployment data
+              hours with the highest actual graduation rate — from on-chain flap.sh, pons,
+              and bow.fun deployment + graduation data
             </p>
           </div>
         </div>
@@ -68,9 +69,9 @@ export default async function LaunchWindowPage() {
                 entries={launchWindows.map((w) => ({
                   dayOfWeek: w.dayOfWeek,
                   hourOfDay: w.hourOfDay,
-                  totalVolumeUsd: w.totalVolumeUsd,
                   deploymentCount: w.deploymentCount,
-                  launchScore: w.launchScore,
+                  graduatedCount: w.graduatedCount,
+                  graduationRate: w.graduationRate,
                 }))}
               />
             </div>
@@ -78,8 +79,8 @@ export default async function LaunchWindowPage() {
             <div className="bg-[#131315] border border-[#1F1F22] rounded-xl p-6 text-center text-gray-500 py-16">
               <p className="text-sm font-medium text-gray-300 mb-1">nothing cooking yet.</p>
               <p className="text-xs text-gray-500 max-w-sm mx-auto">
-                the launch heatmap fills in as on-chain deployment data syncs over the next
-                few hours. check back soon.
+                the launch heatmap fills in as on-chain deployment and graduation data
+                syncs over the next few hours.
               </p>
             </div>
           )}
