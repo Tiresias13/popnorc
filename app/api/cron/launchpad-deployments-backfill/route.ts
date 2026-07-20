@@ -120,12 +120,31 @@ export async function GET(req: NextRequest) {
 
 async function fetchCurrentBlockNumber(): Promise<number> {
   const base = process.env.BLOCKSCOUT_LEGACY_API_BASE || "https://robinhoodchain.blockscout.com/api";
-  const res = await fetch(`${base}?module=block&action=eth_block_number`, {
-    headers: { Accept: "application/json" },
-    next: { revalidate: 0 },
-  });
-  const json = await res.json();
-  return parseInt(json.result, 16);
+
+  // Retries with backoff on 429 (Blockscout rate limits fairly
+  // aggressively) instead of silently propagating NaN downstream, which
+  // previously corrupted every subsequent block-range calculation with
+  // no error thrown until the getLogs call failed with a confusing
+  // "[NaN-14294582]" range.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await fetch(`${base}?module=block&action=eth_block_number`, {
+      headers: { Accept: "application/json" },
+      next: { revalidate: 0 },
+    });
+
+    if (res.status === 429) {
+      await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+      continue;
+    }
+
+    const json = await res.json();
+    const block = parseInt(json.result, 16);
+    if (!Number.isNaN(block)) return block;
+
+    await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+  }
+
+  throw new Error("Failed to fetch current block number after retries");
 }
 
 async function fillMissingTokenMetadata(decoded: DecodedDeployment[]): Promise<void> {
