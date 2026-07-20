@@ -50,7 +50,7 @@ async function fetchLogsRaw(
   url.searchParams.set("toBlock", String(toBlock));
 
   let res: Response | undefined;
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 5; attempt++) {
     res = await fetch(url.toString(), {
       headers: { Accept: "application/json" },
       next: { revalidate: 0 },
@@ -60,7 +60,9 @@ async function fetchLogsRaw(
 
     // Blockscout rate limits aggressively under repeated/parallel calls —
     // back off and retry rather than failing the whole cron run outright.
-    await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+    // Longer backoff than a typical retry loop because observed 429s here
+    // don't clear in 1-3s; give it real room (up to ~15s across 5 tries).
+    await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
   }
 
   if (!res || !res.ok) {
