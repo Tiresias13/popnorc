@@ -1,30 +1,29 @@
 const DAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
-function formatUsd(value: number): string {
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
-  return `$${value.toFixed(0)}`;
-}
-
 export interface LaunchWindow {
   dayOfWeek: number;
   hourOfDay: number;
-  totalVolumeUsd: number;
   deploymentCount: number;
-  launchScore: number;
+  graduatedCount: number;
+  graduationRate: number; // 0-1
 }
 
-// "Best Launch Window" — surfaces hours with high trading demand but
-// comparatively few new token deployments, i.e. where a new launch isn't
-// competing with a flood of same-hour competitors for attention/liquidity.
-// launch_score = total_volume_usd / (deployment_count + 1), computed in
-// Postgres (see heatmap_launch_score RPC) from on-chain launchpad_deployments
-// (flap.sh, Pons, bow.fun — verified directly via Blockscout getLogs, not
-// GeckoTerminal's top-200 pools, so this isn't subject to survivorship bias).
+// "Best Launch Window" — surfaces hours with the highest actual
+// graduation rate (graduated_count / deployment_count), not a volume/
+// competition proxy. This is a real outcome metric: did tokens deployed
+// in this hour actually succeed, based on on-chain graduation tracking
+// (flap.sh LaunchedToDEX event; Pons graduationStatus() / bow.fun
+// migrated() per-token checks — see heatmap_graduation_rate RPC).
+//
+// Hours with very few deployments are excluded below a minimum sample
+// size, since a 1/1 = 100% rate from a single lucky token isn't a
+// meaningful signal.
+const MIN_SAMPLE_SIZE = 5;
+
 export function LaunchWindowCards({ windows }: { windows: LaunchWindow[] }) {
   const top3 = windows
-    .filter((w) => w.totalVolumeUsd > 0)
-    .sort((a, b) => b.launchScore - a.launchScore)
+    .filter((w) => w.deploymentCount >= MIN_SAMPLE_SIZE)
+    .sort((a, b) => b.graduationRate - a.graduationRate)
     .slice(0, 3);
 
   if (top3.length === 0) {
@@ -32,8 +31,8 @@ export function LaunchWindowCards({ windows }: { windows: LaunchWindow[] }) {
       <div className="bg-[#131315] border border-[#1F1F22] rounded-xl p-6 text-center text-gray-500">
         <p className="text-sm font-medium text-gray-300 mb-1">no launch window data yet.</p>
         <p className="text-xs text-gray-500 max-w-sm mx-auto">
-          syncs from on-chain flap.sh, pons, and bow.fun deployments — check back once a
-          full day of data has come in.
+          syncs from on-chain flap.sh, pons, and bow.fun deployments and graduation
+          checks — check back once enough data has come in.
         </p>
       </div>
     );
@@ -44,7 +43,7 @@ export function LaunchWindowCards({ windows }: { windows: LaunchWindow[] }) {
       <div className="flex items-center gap-2 mb-3">
         <h2 className="text-sm font-semibold text-white">best launch window</h2>
         <span className="text-[10px] text-gray-500 mono uppercase tracking-wide">
-          demand ÷ competition
+          graduation rate
         </span>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -61,16 +60,18 @@ export function LaunchWindowCards({ windows }: { windows: LaunchWindow[] }) {
             <p className="text-xs text-gray-500 mb-1">
               {DAYS[w.dayOfWeek]} · {w.hourOfDay}:00–{w.hourOfDay + 1}:00 utc
             </p>
-            <p className="text-xl font-bold mono text-emerald-400">{formatUsd(w.totalVolumeUsd)}</p>
+            <p className="text-xl font-bold mono text-emerald-400">
+              {(w.graduationRate * 100).toFixed(1)}%
+            </p>
             <p className="text-xs text-gray-400 mt-1">
-              {w.deploymentCount} launch{w.deploymentCount === 1 ? "" : "es"} competing
+              {w.graduatedCount}/{w.deploymentCount} tokens graduated
             </p>
           </div>
         ))}
       </div>
       <p className="text-[11px] text-gray-600 mt-2">
-        volume vs. launch competition, last 7 days · thin-data hours can look artificially
-        good — check the deployment count before picking a window.
+        graduated ÷ deployed, last 7 days · only hours with {MIN_SAMPLE_SIZE}+ deployments
+        shown, to avoid small-sample noise
       </p>
     </div>
   );
