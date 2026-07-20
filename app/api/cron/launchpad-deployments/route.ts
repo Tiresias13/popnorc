@@ -36,6 +36,7 @@ export async function GET(req: NextRequest) {
   }
 
   const supabase = createServerClient();
+  const runDeadline = Date.now() + 45_000;
 
   try {
     const currentBlock = await fetchCurrentBlockNumber();
@@ -63,7 +64,7 @@ export async function GET(req: NextRequest) {
       // look those up via a follow-up ERC-20 metadata call per unique
       // token address (deduped, since deployers can appear across
       // multiple logs but each token is deployed exactly once here).
-      await fillMissingTokenMetadata(decoded);
+      await fillMissingTokenMetadata(decoded, runDeadline);
 
       const rows = decoded.map((d) => {
         const dayOfWeek = d.deployedAt.getUTCDay();
@@ -116,12 +117,30 @@ export async function GET(req: NextRequest) {
 
 async function fetchCurrentBlockNumber(): Promise<number> {
   const base = process.env.BLOCKSCOUT_LEGACY_API_BASE || "https://robinhoodchain.blockscout.com/api";
-  const res = await fetch(`${base}?module=block&action=eth_block_number`, {
-    headers: { Accept: "application/json" },
-    next: { revalidate: 0 },
-  });
-  const json = await res.json();
-  return parseInt(json.result, 16);
+
+  // Retries with backoff on 429 instead of silently propagating NaN
+  // downstream (see the backfill route for the incident this was copied
+  // from — a stray NaN here corrupts every subsequent block-range calc
+  // with no error thrown until a much more confusing getLogs failure).
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const res = await fetch(`${base}?module=block&action=eth_block_number`, {
+      headers: { Accept: "application/json" },
+      next: { revalidate: 0 },
+    });
+
+    if (res.status === 429) {
+      await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+      continue;
+    }
+
+    const json = await res.json();
+    const block = parseInt(json.result, 16);
+    if (!Number.isNaN(block)) return block;
+
+    await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+  }
+
+  throw new Error("Failed to fetch current block number after retries");
 }
 
 // Mutates `decoded` in place, filling tokenName/tokenSymbol for entries
@@ -133,13 +152,15 @@ async function fetchCurrentBlockNumber(): Promise<number> {
 // Promise.all.
 const METADATA_CONCURRENCY = 15;
 
-async function fillMissingTokenMetadata(decoded: DecodedDeployment[]): Promise<void> {
+async function fillMissingTokenMetadata(decoded: DecodedDeployment[], deadline: number): Promise<void> {
   const needsLookup = decoded.filter((d) => !d.tokenSymbol);
   const uniqueAddresses = Array.from(new Set(needsLookup.map((d) => d.tokenAddress)));
 
   const infoByAddress = new Map<string, { symbol: string | null; name: string | null }>();
 
   for (let i = 0; i < uniqueAddresses.length; i += METADATA_CONCURRENCY) {
+    if (Date.now() >= deadline) break;
+
     const batch = uniqueAddresses.slice(i, i + METADATA_CONCURRENCY);
     await Promise.all(
       batch.map(async (addr) => {
