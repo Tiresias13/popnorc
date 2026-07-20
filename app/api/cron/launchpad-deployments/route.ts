@@ -126,17 +126,28 @@ async function fetchCurrentBlockNumber(): Promise<number> {
 
 // Mutates `decoded` in place, filling tokenName/tokenSymbol for entries
 // missing them (Pons, bow.fun) via Blockscout's ERC-20 token-info endpoint.
+// fetchTokenInfo never throws (see lib/api/blockscout.ts), but firing off
+// hundreds of concurrent lookups at once (e.g. on a wide backfill range
+// with many unique Pons/bow.fun tokens) still isn't great for Blockscout's
+// rate limits, so this batches lookups instead of a single unbounded
+// Promise.all.
+const METADATA_CONCURRENCY = 15;
+
 async function fillMissingTokenMetadata(decoded: DecodedDeployment[]): Promise<void> {
   const needsLookup = decoded.filter((d) => !d.tokenSymbol);
   const uniqueAddresses = Array.from(new Set(needsLookup.map((d) => d.tokenAddress)));
 
   const infoByAddress = new Map<string, { symbol: string | null; name: string | null }>();
-  await Promise.all(
-    uniqueAddresses.map(async (addr) => {
-      const info = await fetchTokenInfo(addr);
-      infoByAddress.set(addr, { symbol: info?.symbol ?? null, name: info?.name ?? null });
-    })
-  );
+
+  for (let i = 0; i < uniqueAddresses.length; i += METADATA_CONCURRENCY) {
+    const batch = uniqueAddresses.slice(i, i + METADATA_CONCURRENCY);
+    await Promise.all(
+      batch.map(async (addr) => {
+        const info = await fetchTokenInfo(addr);
+        infoByAddress.set(addr, { symbol: info?.symbol ?? null, name: info?.name ?? null });
+      })
+    );
+  }
 
   for (const d of needsLookup) {
     const info = infoByAddress.get(d.tokenAddress);
