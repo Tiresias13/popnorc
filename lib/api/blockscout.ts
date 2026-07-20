@@ -93,18 +93,27 @@ export interface BlockscoutTokenInfo {
 // Fetches token metadata (decimals, symbol) needed to convert raw on-chain
 // balances into human-readable amounts.
 export async function fetchTokenInfo(tokenAddress: string): Promise<BlockscoutTokenInfo | null> {
-  const res = await fetch(`${BASE_URL}/tokens/${tokenAddress}`, {
-    headers: { Accept: "application/json" },
-    next: { revalidate: 0 },
-  });
+  // Callers (e.g. the launchpad deployment backfill) fan this out across
+  // many tokens concurrently — a network-level failure (not just a non-2xx
+  // response) on any single fetch() call must not throw past this
+  // function, or it takes down an entire Promise.all batch with a vague
+  // "fetch failed" error.
+  try {
+    const res = await fetch(`${BASE_URL}/tokens/${tokenAddress}`, {
+      headers: { Accept: "application/json" },
+      next: { revalidate: 0 },
+    });
 
-  if (!res.ok) return null;
+    if (!res.ok) return null;
 
-  const json = await res.json();
-  return {
-    decimals: Number(json.decimals ?? 18),
-    symbol: json.symbol,
-    name: json.name ?? null,
-    exchange_rate: json.exchange_rate ?? null,
-  };
+    const json = await res.json();
+    return {
+      decimals: Number(json.decimals ?? 18),
+      symbol: json.symbol,
+      name: json.name ?? null,
+      exchange_rate: json.exchange_rate ?? null,
+    };
+  } catch {
+    return null;
+  }
 }
