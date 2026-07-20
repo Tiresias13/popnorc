@@ -86,6 +86,7 @@ export async function fetchTokenTransfers(
 export interface BlockscoutTokenInfo {
   decimals: number;
   symbol: string;
+  name: string | null;
   exchange_rate: string | null;
 }
 
@@ -103,6 +104,7 @@ export async function fetchTokenInfo(tokenAddress: string): Promise<BlockscoutTo
   return {
     decimals: Number(json.decimals ?? 18),
     symbol: json.symbol,
+    name: json.name ?? null,
     exchange_rate: json.exchange_rate ?? null,
   };
 }
