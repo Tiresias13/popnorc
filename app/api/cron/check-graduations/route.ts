@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { fetchLaunchpadLogs } from "@/lib/api/blockscout-logs";
-import { checkPonsGraduated, checkBowGraduated } from "@/lib/api/blockscout-rpc";
+import { checkPonsGraduated } from "@/lib/api/blockscout-rpc";
+import { fetchAllBowGraduationStatus } from "@/lib/api/bowfun";
 import { LAUNCHPADS, FLAP_GRADUATION_TOPIC0, decodeFlapGraduationLog } from "@/lib/launchpad-config";
 
 export const dynamic = "force-dynamic";
@@ -15,32 +16,35 @@ export const maxDuration = 60;
 // Full history, cheap, fast (getLogs is reliably fast, unlike eth_call —
 // see below).
 //
-// Pons & bow.fun: no global graduation event exists, so each token has
-// to be checked individually via eth_call (graduationStatus(token) for
-// Pons, migrated() for bow.fun).
+// Pons: no global graduation event exists (confirmed against Pons's own
+// docs — "There is no migration event. Poll graduationStatus(token) for
+// graduation." — this is the protocol's own recommended approach, not a
+// workaround), so each token has to be checked individually via eth_call.
 //
-// IMPORTANT — Blockscout's eth_call endpoint is slow and inconsistent in
-// practice: direct testing showed single-call latency ranging from ~1s
-// to ~9s, even at low concurrency (not just under heavy load, and not
-// predictable enough to size a fixed per-run token limit around). Two
-// earlier versions of this cron (CHECK_LIMIT 200 then 150, concurrency
-// 20 then unthrottled) both blew through Vercel's 60s function timeout
-// in production. This version uses a TIME BUDGET instead of guessing a
-// fixed token count: it tracks elapsed wall-clock time and stops
-// starting new batches once it's within a safety margin of maxDuration,
-// leaving whatever wasn't reached for the next run (graduation_checked_at
-// ordering means the queue naturally picks up where it left off).
-// Low concurrency per batch (RPC_CONCURRENCY) so a handful of slow calls
-// can't stall everything at once, and Pons/bow.fun run sequentially, not
-// in parallel, so they don't compete for the same slow endpoint at once.
-// Each individual eth_call also has its own hard timeout (see
-// blockscout-rpc.ts) — tokens that time out are left unchecked (not
-// marked graduated=false, graduation_checked_at not advanced) so they're
-// retried on a future run instead of silently skipped.
+// bow.fun: unlike Pons, bow.fun exposes a bulk public API
+// (bow.fun/api/tokens, paginated) that includes `graduated` directly per
+// token — confirmed via direct testing to be fast and tolerate high
+// concurrency (unlike Blockscout's eth-rpc endpoint). This entirely
+// replaces the old per-token eth_call approach for bow.fun, and covers
+// its full token list in a few seconds instead of being limited by a time
+// budget.
+//
+// IMPORTANT — Blockscout's eth_call endpoint (still used for Pons) is
+// slow and inconsistent in practice: direct testing showed single-call
+// latency ranging from ~1s to ~9s, even at low concurrency. Earlier
+// versions of this cron that used eth_call for both Pons and bow.fun with
+// a fixed per-run token-count limit blew through Vercel's 60s function
+// timeout in production. Pons still uses a TIME BUDGET instead of
+// guessing a fixed token count: track elapsed wall-clock time, stop
+// starting new batches once within a safety margin of maxDuration, leave
+// whatever wasn't reached for the next run. Tokens that time out are left
+// unchecked (not marked graduated=false, graduation_checked_at not
+// advanced) so they're retried on a future run instead of silently
+// skipped.
 //
 // Recommended schedule: every 10 minutes, same as the deployment cron.
 const RPC_CONCURRENCY = 5;
-const TIME_BUDGET_MS = 45_000; // stop starting new work past this, leaving margin under the 60s hard limit
+const TIME_BUDGET_MS = 45_000; // stop starting new Pons work past this, leaving margin under the 60s hard limit
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
@@ -56,21 +60,16 @@ export async function GET(req: NextRequest) {
   try {
     const flap = await checkFlapGraduations(supabase);
 
-    // Split the remaining time budget evenly between Pons and bow.fun so
-    // Pons's much larger backlog (~8,500+ tokens) can't starve bow.fun of
-    // every run's time slice. Each gets a deadline computed relative to
-    // when IT starts, not a shared fixed point from before Pons ran —
-    // otherwise bow.fun's deadline would already be in the past the
-    // moment it starts, since Pons would have consumed its full slice
-    // first.
-    const afterFlapBudget = TIME_BUDGET_MS - (Date.now() - runStart);
-    const halfBudget = Math.max(0, afterFlapBudget / 2);
+    // bow.fun's bulk API sync is fast (seconds, not budget-limited in
+    // practice), so it gets its own generous slice of the remaining
+    // budget but rarely needs all of it. Whatever's left after both
+    // flap.sh and bow.fun goes to Pons, which is the one actually
+    // constrained by per-token eth_call throughput.
+    const bowDeadline = runStart + TIME_BUDGET_MS * 0.4;
+    const bow = await syncBowGraduations(supabase, bowDeadline);
 
-    const ponsStart = Date.now();
-    const pons = await checkPerTokenGraduations(supabase, "pons", checkPonsGraduatedWrapper, ponsStart + halfBudget);
-
-    const bowStart = Date.now();
-    const bow = await checkPerTokenGraduations(supabase, "bow", checkBowGraduated, bowStart + halfBudget);
+    const ponsDeadline = runStart + TIME_BUDGET_MS;
+    const pons = await checkPerTokenGraduations(supabase, "pons", checkPonsGraduatedWrapper, ponsDeadline);
 
     return NextResponse.json({
       ok: true,
@@ -89,6 +88,40 @@ export async function GET(req: NextRequest) {
 async function checkPonsGraduatedWrapper(tokenAddress: string): Promise<boolean | null> {
   const ponsConfig = LAUNCHPADS.find((l) => l.id === "pons")!;
   return checkPonsGraduated(ponsConfig.contractAddress, tokenAddress);
+}
+
+// bow.fun: pages through the bulk API, then batch-updates
+// launchpad_deployments for any token whose graduated status is now true
+// (mirrors the flap.sh event-scan pattern — a handful of batched
+// `.in("token_address", [...])` calls, not one per token).
+async function syncBowGraduations(
+  supabase: ReturnType<typeof createServerClient>,
+  deadline: number
+): Promise<{ checked: number; graduated: number }> {
+  const statusByToken = await fetchAllBowGraduationStatus(deadline);
+
+  if (statusByToken.size === 0) return { checked: 0, graduated: 0 };
+
+  const graduatedAddresses = Array.from(statusByToken.entries())
+    .filter(([, graduated]) => graduated)
+    .map(([addr]) => addr);
+
+  if (graduatedAddresses.length === 0) return { checked: statusByToken.size, graduated: 0 };
+
+  const { data: updated, error } = await supabase
+    .from("launchpad_deployments")
+    .update({ graduated: true, graduated_at: new Date().toISOString(), graduation_checked_at: new Date().toISOString() })
+    .eq("launchpad", "bow")
+    .eq("graduated", false)
+    .in("token_address", graduatedAddresses)
+    .select("id");
+
+  if (error) {
+    console.error("bow graduation update error:", error);
+    return { checked: statusByToken.size, graduated: 0 };
+  }
+
+  return { checked: statusByToken.size, graduated: updated?.length ?? 0 };
 }
 
 // flap.sh: scan LaunchedToDEX over the same window covered by the
