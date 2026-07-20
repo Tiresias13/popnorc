@@ -27,8 +27,17 @@ export const maxDuration = 60;
 //   - tokens that already graduated are skipped forever (never
 //     re-checked, since `graduated` only flips one way)
 //
+// IMPORTANT: DB writes are batched (2 update calls per launchpad — one
+// for newly-graduated ids, one for still-pending ids — via `.in("id",
+// [...])`) instead of one round-trip per token. An earlier version did a
+// sequential update per token (up to ~400 round-trips across both
+// launchpads) and blew through Vercel's 60s function timeout in
+// production. Pons and bow.fun are also checked concurrently with
+// Promise.all rather than one after another.
+//
 // Recommended schedule: every 10 minutes, same as the deployment cron.
-const CHECK_LIMIT = 200;
+const CHECK_LIMIT = 150;
+const RPC_CONCURRENCY = 20;
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
@@ -39,14 +48,19 @@ export async function GET(req: NextRequest) {
   }
 
   const supabase = createServerClient();
-  const results: Record<string, { checked: number; graduated: number }> = {};
 
   try {
-    results.flap = await checkFlapGraduations(supabase);
-    results.pons = await checkPerTokenGraduations(supabase, "pons", checkPonsGraduatedWrapper);
-    results.bow = await checkPerTokenGraduations(supabase, "bow", checkBowGraduatedWrapper);
+    const [flap, pons, bow] = await Promise.all([
+      checkFlapGraduations(supabase),
+      checkPerTokenGraduations(supabase, "pons", checkPonsGraduatedWrapper),
+      checkPerTokenGraduations(supabase, "bow", checkBowGraduated),
+    ]);
 
-    return NextResponse.json({ ok: true, timestamp: new Date().toISOString(), results });
+    return NextResponse.json({
+      ok: true,
+      timestamp: new Date().toISOString(),
+      results: { flap, pons, bow },
+    });
   } catch (err) {
     console.error("Check-graduations cron failed:", err);
     return NextResponse.json(
@@ -61,13 +75,10 @@ async function checkPonsGraduatedWrapper(tokenAddress: string): Promise<boolean>
   return checkPonsGraduated(ponsConfig.contractAddress, tokenAddress);
 }
 
-async function checkBowGraduatedWrapper(tokenAddress: string): Promise<boolean> {
-  return checkBowGraduated(tokenAddress);
-}
-
 // flap.sh: scan LaunchedToDEX over the same window covered by the
 // deployment cron's sync cursor, and flip `graduated` for any token
-// addresses found.
+// addresses found. Single batched update via `.in("token_address", [...])`
+// rather than one call per graduated token.
 async function checkFlapGraduations(
   supabase: ReturnType<typeof createServerClient>
 ): Promise<{ checked: number; graduated: number }> {
@@ -87,23 +98,35 @@ async function checkFlapGraduations(
   const logs = await fetchLaunchpadLogs(flapConfig.contractAddress, FLAP_GRADUATION_TOPIC0, fromBlock, toBlock);
   const graduations = logs.map(decodeFlapGraduationLog);
 
-  let graduated = 0;
-  for (const g of graduations) {
-    const { error, count } = await supabase
-      .from("launchpad_deployments")
-      .update({ graduated: true, graduated_at: g.graduatedAt.toISOString() }, { count: "exact" })
-      .eq("launchpad", "flap")
-      .eq("token_address", g.tokenAddress)
-      .eq("graduated", false);
+  if (graduations.length === 0) return { checked: 0, graduated: 0 };
 
-    if (!error && count) graduated += count;
+  // Most recent graduatedAt wins if a token somehow appears twice in the
+  // window; dedupe by address.
+  const byAddress = new Map<string, Date>();
+  for (const g of graduations) byAddress.set(g.tokenAddress, g.graduatedAt);
+
+  const tokenAddresses = Array.from(byAddress.keys());
+
+  const { data: updated, error } = await supabase
+    .from("launchpad_deployments")
+    .update({ graduated: true, graduated_at: new Date().toISOString() })
+    .eq("launchpad", "flap")
+    .eq("graduated", false)
+    .in("token_address", tokenAddresses)
+    .select("id");
+
+  if (error) {
+    console.error("flap graduation update error:", error);
+    return { checked: graduations.length, graduated: 0 };
   }
 
-  return { checked: graduations.length, graduated };
+  return { checked: graduations.length, graduated: updated?.length ?? 0 };
 }
 
 // Pons/bow.fun: per-token eth_call, throttled to CHECK_LIMIT rows per
-// run, oldest-checked-first so the backlog shrinks over time.
+// run, oldest-checked-first so the backlog shrinks over time. Results are
+// written back in two batched updates (graduated ids, non-graduated ids)
+// instead of one round-trip per row.
 async function checkPerTokenGraduations(
   supabase: ReturnType<typeof createServerClient>,
   launchpad: "pons" | "bow",
@@ -119,14 +142,12 @@ async function checkPerTokenGraduations(
 
   if (!rows || rows.length === 0) return { checked: 0, graduated: 0 };
 
-  let graduated = 0;
   const checkedAt = new Date().toISOString();
+  const graduatedIds: string[] = [];
+  const pendingIds: string[] = [];
 
-  // Concurrency-limited: fire in small batches rather than all at once,
-  // to avoid hammering the Blockscout RPC endpoint.
-  const BATCH_SIZE = 10;
-  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-    const batch = rows.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < rows.length; i += RPC_CONCURRENCY) {
+    const batch = rows.slice(i, i + RPC_CONCURRENCY);
     const outcomes = await Promise.all(
       batch.map(async (row) => ({
         id: row.id as string,
@@ -135,20 +156,24 @@ async function checkPerTokenGraduations(
     );
 
     for (const outcome of outcomes) {
-      if (outcome.isGraduated) {
-        await supabase
-          .from("launchpad_deployments")
-          .update({ graduated: true, graduated_at: checkedAt, graduation_checked_at: checkedAt })
-          .eq("id", outcome.id);
-        graduated++;
-      } else {
-        await supabase
-          .from("launchpad_deployments")
-          .update({ graduation_checked_at: checkedAt })
-          .eq("id", outcome.id);
-      }
+      if (outcome.isGraduated) graduatedIds.push(outcome.id);
+      else pendingIds.push(outcome.id);
     }
   }
 
-  return { checked: rows.length, graduated };
+  if (graduatedIds.length > 0) {
+    await supabase
+      .from("launchpad_deployments")
+      .update({ graduated: true, graduated_at: checkedAt, graduation_checked_at: checkedAt })
+      .in("id", graduatedIds);
+  }
+
+  if (pendingIds.length > 0) {
+    await supabase
+      .from("launchpad_deployments")
+      .update({ graduation_checked_at: checkedAt })
+      .in("id", pendingIds);
+  }
+
+  return { checked: rows.length, graduated: graduatedIds.length };
 }
